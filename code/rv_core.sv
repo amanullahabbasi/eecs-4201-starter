@@ -28,6 +28,7 @@ module rv_core #(
     logic [DWIDTH-1:0] f_insn;
     logic pc_en;
     logic stall, flush;
+    logic jump_branch; 
 
     // stall and flush logic instantiation
     // For stage 1, you do not need to modify this
@@ -49,7 +50,7 @@ module rv_core #(
         .rst(reset),
         .next_pc_i(f_pc),
         .pc_en_i(1'b1),
-        .jump_branch_i(/*LH1???*/),
+        .jump_branch_i(jump_branch),
         .pc_o(pc),
         .insn_o()
     );
@@ -69,6 +70,12 @@ module rv_core #(
 
     assign d_insn = f_insn;
     assign d_pc = pc;
+
+    // jal/jalr or taken branch
+    assign jump_branch = c_pcsel || e_brtaken;
+
+    // jump address or pc     
+    assign f_pc = jump_branch ? (e_res & 32'hFFFFFFFE) : pc;             
 
     // Logic hole 2 (LH2): Please see decode.sv for details on LH2
     // decode instantiation
@@ -146,9 +153,14 @@ module rv_core #(
     // Logic hole 5 (LH5): Complete the logic to determine the inputs to the ALU
     //                     alu_A, mux_B, alu_B
 
-    assign alu_A = /* LH5??? */
-    assign mux_B = /* LH5??? */
-    assign alu_B = /* LH5??? */
+    // jal/auipc need pc to calculate address, otherwise rs1
+    assign alu_A = c_rs1sel ? d_pc : r_rs1data;
+
+    // rs2 sent to alu and memory
+    assign mux_B = r_rs2data;
+
+    // rs2 for r-type and branch compares
+    assign alu_B = c_rs2sel ? d_imm : mux_B;
 
     // Logic hole 6 (LH6): Please see execute.sv for details on LH6
     // Execute instantiation
