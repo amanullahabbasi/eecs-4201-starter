@@ -29,6 +29,9 @@ module rv_core #(
     logic pc_en;
     logic stall, flush;
     logic jump_branch;
+    logic idex_en, idex_clear;
+    logic exmem_en, exmem_clear;
+    logic memwb_en, memwb_clear;
 
     // stall and flush logic instantiation
     // For stage 1, you do not need to modify this
@@ -37,7 +40,13 @@ module rv_core #(
         .br_jump_i(jump_branch),
         .pc_en_o(pc_en),
         .stall_o(stall),
-        .flush_o(flush)
+        .flush_o(flush),
+        .idex_en_o(idex_en),
+        .idex_clear_o(idex_clear),
+        .exmem_en_o(exmem_en),
+        .exmem_clear_o(exmem_clear),
+        .memwb_en_o(memwb_en),
+        .memwb_clear_o(memwb_clear)
     );
 
     // fetch instantiation
