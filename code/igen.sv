@@ -23,35 +23,36 @@ module igen #(
     output logic [DWIDTH-1:0] imm_o
 );
 
-  // Logic hole 3: Complete the immediate value generator
-  always_comb begin
-    case (opcode_i)
-      `I_TYPE_L: begin
-      /* LH3??? */
-      end
-      `I_TYPE_JALR: begin
-      /* LH3??? */
-      end
-      `I_TYPE: begin
-      /* LH3??? */
-      end
-      `S_TYPE: begin
-      /* LH3??? */
-      end
-      `B_TYPE: begin
-      /* LH3??? */
-      end
-      `U_TYPE_LUI, `U_TYPE_AUIPC: begin
-      /* LH3??? */
-      end
-      `U_TYPE_AUIPC: begin
-      /* LH3??? */
-      end
-      `J_TYPE: begin
-      /* LH3??? */
-      end
-      /* LH3??? */
-    endcase
-  end
+    // Logic hole 3: Complete the immediate value generator
+    always_comb begin
+        imm_o = '0;
+
+        case (opcode_i)
+            `I_TYPE,
+            `I_TYPE_L,
+            `I_TYPE_JALR: begin
+                imm_o = {{20{insn_i[31]}}, `ITYPE_IMM};
+            end
+
+            `S_TYPE: begin
+                imm_o = {{20{insn_i[31]}}, `STYPE_IMM};
+            end
+
+            `B_TYPE: begin
+                imm_o = {{19{insn_i[31]}}, `BTYPE_IMM, 1'b0};
+            end
+
+            `U_TYPE_LUI, `U_TYPE_AUIPC: begin
+                imm_o = `UTYPE_IMM;
+            end
+
+            `J_TYPE: begin
+                imm_o = {{11{insn_i[31]}}, `JTYPE_IMM, 1'b0};
+            end
+
+            default: begin
+            end
+        endcase
+    end
 
 endmodule : igen
