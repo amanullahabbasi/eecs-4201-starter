@@ -46,28 +46,116 @@ module control #(
     output logic [3:0] alusel_o
 );
 
-assign memren_o = (opcode_i == `I_TYPE_L);
-assign memwren_o = (opcode_i == `S_TYPE);
-assign immsel_o = !(opcode_i == `R_TYPE);
-
 /* Logic hole 4 (LH4): Complete the control path. This is a key logic module
                        that is crucial for correctness. Pay close attention to
                        this logic.
 */
 
-logic is_jump;
-assign is_jump = (opcode_i == `J_TYPE) || (opcode_i == `I_TYPE_JALR);
-/* LH4??? */
+    always_comb begin
+        pcsel_o   = 1'b0;
+        immsel_o  = 1'b0;
+        regwren_o = 1'b0;
+        rs1sel_o  = 1'b0;
+        rs2sel_o  = 1'b0;
+        memren_o  = 1'b0;
+        memwren_o = 1'b0;
+        wbsel_o   = `WB_ALU;
+        alusel_o  = `ALU_NOP;
 
-  always_comb begin
-    case (opcode_i)
-      /* LH4??? */
-      default: begin
-        wbsel_o = `WB_ALU;
-        alusel_o = `ALU_NOP;
-      end
-    endcase
-  end
+        case (opcode_i)
+            `R_TYPE: begin
+                regwren_o = 1'b1;
+                wbsel_o   = `WB_ALU;
+
+                case (funct3_i)
+                    `F3_ADD:    alusel_o = (funct7_i == `F7_SUB) ? `ALU_SUB : `ALU_ADD;
+                    `F3_XOR:    alusel_o = `ALU_XOR;
+                    `F3_OR:     alusel_o = `ALU_OR;
+                    `F3_AND:    alusel_o = `ALU_AND;
+                    `F3_SLEFT:  alusel_o = `ALU_SLL;
+                    `F3_SRIGHT: alusel_o = (funct7_i == `F7_SRA) ? `ALU_SRA : `ALU_SRL;
+                    `F3_SLT:    alusel_o = `ALU_SLT;
+                    `F3_SLTU:   alusel_o = `ALU_SLTU;
+                    default:    alusel_o = `ALU_NOP;
+                endcase
+            end
+
+            `I_TYPE: begin
+                regwren_o = 1'b1;
+                immsel_o  = 1'b1;
+                rs2sel_o  = 1'b1;
+                wbsel_o   = `WB_ALU;
+
+                case (funct3_i)
+                    `F3_ADD:    alusel_o = `ALU_ADD;
+                    `F3_XOR:    alusel_o = `ALU_XOR;
+                    `F3_OR:     alusel_o = `ALU_OR;
+                    `F3_AND:    alusel_o = `ALU_AND;
+                    `F3_SLEFT:  alusel_o = `ALU_SLL;
+                    `F3_SRIGHT: alusel_o = (funct7_i == `F7_SRA) ? `ALU_SRA : `ALU_SRL;
+                    `F3_SLT:    alusel_o = `ALU_SLT;
+                    `F3_SLTU:   alusel_o = `ALU_SLTU;
+                    default:    alusel_o = `ALU_NOP;
+                endcase
+            end
+
+            `I_TYPE_L: begin
+                regwren_o = 1'b1;
+                immsel_o  = 1'b1;
+                rs2sel_o  = 1'b1;
+                memren_o  = 1'b1;
+                wbsel_o   = `WB_MEM;
+                alusel_o  = `ALU_ADD;
+            end
+
+            `S_TYPE: begin
+                immsel_o  = 1'b1;
+                rs2sel_o  = 1'b1;
+                memwren_o = 1'b1;
+                alusel_o  = `ALU_ADD;
+            end
+
+            `B_TYPE: begin
+                alusel_o = `ALU_ADD;
+            end
+
+            `I_TYPE_JALR: begin
+                pcsel_o   = 1'b1;
+                regwren_o = 1'b1;
+                immsel_o  = 1'b1;
+                rs2sel_o  = 1'b1;
+                wbsel_o   = `WB_PC4;
+                alusel_o  = `ALU_ADD;
+            end
+
+            `J_TYPE: begin
+                pcsel_o   = 1'b1;
+                regwren_o = 1'b1;
+                immsel_o  = 1'b1;
+                rs1sel_o  = 1'b1;
+                rs2sel_o  = 1'b1;
+                wbsel_o   = `WB_PC4;
+                alusel_o  = `ALU_ADD;
+            end
+
+            `U_TYPE_LUI: begin
+                regwren_o = 1'b1;
+                wbsel_o   = `WB_IMM;
+            end
+
+            `U_TYPE_AUIPC: begin
+                regwren_o = 1'b1;
+                immsel_o  = 1'b1;
+                rs1sel_o  = 1'b1;
+                rs2sel_o  = 1'b1;
+                wbsel_o   = `WB_ALU;
+                alusel_o  = `ALU_ADD;
+            end
+
+            default: begin
+            end
+        endcase
+    end
 
 endmodule : control
 

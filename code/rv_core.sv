@@ -28,6 +28,7 @@ module rv_core #(
     logic [DWIDTH-1:0] f_insn;
     logic pc_en;
     logic stall, flush;
+    logic jump_branch;
 
     // stall and flush logic instantiation
     // For stage 1, you do not need to modify this
@@ -49,7 +50,7 @@ module rv_core #(
         .rst(reset),
         .next_pc_i(f_pc),
         .pc_en_i(1'b1),
-        .jump_branch_i(/*LH1???*/),
+        .jump_branch_i(jump_branch),
         .pc_o(pc),
         .insn_o()
     );
@@ -88,8 +89,8 @@ module rv_core #(
         .rs2_o(d_rs2),
         .funct7_o(d_funct7),
         .funct3_o(d_funct3),
-        .shamt_o(d_shamt),
-        .imm_o(d_imm)
+        .shamt_o(),
+        .imm_o()
     );
 
     // immediate generator signals
@@ -146,9 +147,11 @@ module rv_core #(
     // Logic hole 5 (LH5): Complete the logic to determine the inputs to the ALU
     //                     alu_A, mux_B, alu_B
 
-    assign alu_A = /* LH5??? */
-    assign mux_B = /* LH5??? */
-    assign alu_B = /* LH5??? */
+    assign jump_branch = c_pcsel || e_brtaken;
+    assign f_pc = jump_branch ? e_res : pc;
+    assign alu_A = c_rs1sel ? d_pc : r_rs1data;
+    assign mux_B = r_rs2data;
+    assign alu_B = c_rs2sel ? d_imm : mux_B;
 
     // Logic hole 6 (LH6): Please see execute.sv for details on LH6
     // Execute instantiation

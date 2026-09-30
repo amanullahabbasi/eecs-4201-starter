@@ -56,9 +56,19 @@ module decode #(
         // Logic hole 2 (LH2): Determine the assignment of source register operands
         //               rs1_o and rs2_o.
         // Source register rs1 for R-type, I-type, S-type, B-type instructions.
-        rs1_o = /* LH2???? */
+        rs1_o = (opcode_o == `R_TYPE      ||
+                 opcode_o == `I_TYPE      ||
+                 opcode_o == `I_TYPE_L    ||
+                 opcode_o == `I_TYPE_JALR ||
+                 opcode_o == `S_TYPE      ||
+                 opcode_o == `B_TYPE)
+              ? insn_i[19:15] : 5'd0;
+
         // Source registter rs2 for R-type, S-type, B-type instructions.
-        rs2_o = /* LH2???? */
+        rs2_o = (opcode_o == `R_TYPE ||
+                 opcode_o == `S_TYPE ||
+                 opcode_o == `B_TYPE)
+              ? insn_i[24:20] : 5'd0;
 
         // FUNCT7 for R-type and I-type shift (slli, srli, srai) instructions.
         funct7_o = `FUNCT7;
