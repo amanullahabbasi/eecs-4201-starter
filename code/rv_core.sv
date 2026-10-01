@@ -19,6 +19,50 @@ module rv_core #(
   output logic busy
 );
 
+    // IF/ID registers
+    logic [AWIDTH-1:0] if_id_pc;
+    logic [DWIDTH-1:0] if_id_insn;
+
+    // ID/EX registers
+    logic [AWIDTH-1:0] id_ex_pc;
+    logic [DWIDTH-1:0] id_ex_insn;
+    logic [DWIDTH-1:0] id_ex_rs1data;
+    logic [DWIDTH-1:0] id_ex_rs2data;
+    logic [DWIDTH-1:0] id_ex_imm;
+    logic [4:0] id_ex_rs1;
+    logic [4:0] id_ex_rs2;
+    logic [4:0] id_ex_rd;
+    logic id_ex_pcsel;
+    logic id_ex_regwren;
+    logic id_ex_rs1sel;
+    logic id_ex_rs2sel;
+    logic id_ex_memren;
+    logic id_ex_memwren;
+    logic [1:0] id_ex_wbsel;
+    logic [3:0] id_ex_alusel;
+
+    // EX/MEM registers
+    logic [AWIDTH-1:0] ex_mem_pc;
+    logic [DWIDTH-1:0] ex_mem_insn;
+    logic [DWIDTH-1:0] ex_mem_result;
+    logic [DWIDTH-1:0] ex_mem_store_data;
+    logic [DWIDTH-1:0] ex_mem_imm;
+    logic [4:0] ex_mem_rs2;
+    logic [4:0] ex_mem_rd;
+    logic ex_mem_regwren;
+    logic ex_mem_memren;
+    logic ex_mem_memwren;
+    logic [1:0] ex_mem_wbsel;
+
+    // MEM/WB registers
+    logic [AWIDTH-1:0] mem_wb_pc;
+    logic [DWIDTH-1:0] mem_wb_result;
+    logic [DWIDTH-1:0] mem_wb_load_data;
+    logic [DWIDTH-1:0] mem_wb_imm;
+    logic [4:0] mem_wb_rd;
+    logic mem_wb_regwren;
+    logic [1:0] mem_wb_wbsel;
+
     // ---------- FETCH STAGE ----------- //
     // Logic hole 1 (LH1) : In fetch, determining next PC on a jump/branch
     //               that will feed into jump_branch_i port in fetch module.
@@ -27,13 +71,13 @@ module rv_core #(
     logic [AWIDTH-1:0] f_pc, pc;
     logic [DWIDTH-1:0] f_insn;
     logic pc_en;
-    logic stall, flush;
-    logic jump_branch; 
+    logic stall, flush, hazard;
+    logic jump_branch;
 
     // stall and flush logic instantiation
     // For stage 1, you do not need to modify this
     stall_flush_logic stall_flush (
-        .hazard_i(1'b0),
+        .hazard_i(hazard),
         .br_jump_i(jump_branch),
         .pc_en_o(pc_en),
         .stall_o(stall),
@@ -49,7 +93,7 @@ module rv_core #(
         .clk(clk),
         .rst(reset),
         .next_pc_i(f_pc),
-        .pc_en_i(1'b1),
+        .pc_en_i(pc_en),
         .jump_branch_i(jump_branch),
         .pc_o(pc),
         .insn_o()
@@ -68,14 +112,8 @@ module rv_core #(
     logic [DWIDTH-1:0] d_insn;
     logic [AWIDTH-1:0] d_pc;
 
-    assign d_insn = f_insn;
-    assign d_pc = pc;
-
-    // jal/jalr or taken branch
-    assign jump_branch = c_pcsel || e_brtaken;
-
-    // jump address or pc     
-    assign f_pc = jump_branch ? (e_res & 32'hFFFFFFFE) : pc;             
+    assign d_insn = if_id_insn;
+    assign d_pc = if_id_pc;
 
     // Logic hole 2 (LH2): Please see decode.sv for details on LH2
     // decode instantiation
@@ -95,8 +133,8 @@ module rv_core #(
         .rs2_o(d_rs2),
         .funct7_o(d_funct7),
         .funct3_o(d_funct3),
-        .shamt_o(d_shamt),
-        .imm_o(d_imm)
+        .shamt_o(),
+        .imm_o()
     );
 
     // immediate generator signals
@@ -148,19 +186,76 @@ module rv_core #(
     // ---------- EXECUTE STAGE --------- //
     // execute signals
     logic [DWIDTH - 1:0] alu_A, alu_B, mux_B, e_res;
+    logic [DWIDTH - 1:0] e_rs1data, e_rs2data;
+    logic [DWIDTH - 1:0] m_forward_data;
+    logic [DWIDTH - 1:0] r_rs1data, r_rs2data;
+    logic [DWIDTH - 1:0] d_rs1data, d_rs2data;
+    logic [DWIDTH - 1:0] m_store_data;
+    logic [DWIDTH - 1:0] wb_data;
     logic e_brtaken;
+
+    hazard_detection hazard1 (
+        .decode_insn_i(if_id_insn),
+        .execute_load_i(id_ex_memren),
+        .execute_rd_i(id_ex_rd),
+        .hazard_o(hazard)
+    );
+
+    writeback #(
+        .DWIDTH(DWIDTH),
+        .AWIDTH(AWIDTH)
+    ) m_wb_mux (
+        .pc_i(ex_mem_pc),
+        .alu_res_i(ex_mem_result),
+        .memory_data_i('0),
+        .wbsel_i(ex_mem_wbsel),
+        .imm_i(ex_mem_imm),
+        .writeback_data_o(m_forward_data)
+    );
+
+    forwarding #(
+        .DWIDTH(DWIDTH)
+    ) forward_rs1 (
+        .source_i(id_ex_rs1),
+        .source_data_i(id_ex_rs1data),
+        .memory_rd_i(ex_mem_rd),
+        .memory_regwrite_i(ex_mem_regwren),
+        .memory_load_i(ex_mem_memren),
+        .memory_data_i(m_forward_data),
+        .writeback_rd_i(mem_wb_rd),
+        .writeback_regwrite_i(mem_wb_regwren),
+        .writeback_data_i(wb_data),
+        .forwarded_data_o(e_rs1data)
+    );
+
+    forwarding #(
+        .DWIDTH(DWIDTH)
+    ) forward_rs2 (
+        .source_i(id_ex_rs2),
+        .source_data_i(id_ex_rs2data),
+        .memory_rd_i(ex_mem_rd),
+        .memory_regwrite_i(ex_mem_regwren),
+        .memory_load_i(ex_mem_memren),
+        .memory_data_i(m_forward_data),
+        .writeback_rd_i(mem_wb_rd),
+        .writeback_regwrite_i(mem_wb_regwren),
+        .writeback_data_i(wb_data),
+        .forwarded_data_o(e_rs2data)
+    );
+
+    // Forward store data from WB when needed.
+    assign m_store_data = (mem_wb_regwren && mem_wb_rd != 0 &&
+                           mem_wb_rd == ex_mem_rs2) ?
+                          wb_data : ex_mem_store_data;
 
     // Logic hole 5 (LH5): Complete the logic to determine the inputs to the ALU
     //                     alu_A, mux_B, alu_B
 
-    // jal/auipc need pc to calculate address, otherwise rs1
-    assign alu_A = c_rs1sel ? d_pc : r_rs1data;
-
-    // rs2 sent to alu and memory
-    assign mux_B = r_rs2data;
-
-    // rs2 for r-type and branch compares
-    assign alu_B = c_rs2sel ? d_imm : mux_B;
+    assign jump_branch = id_ex_pcsel || e_brtaken;
+    assign f_pc = jump_branch ? e_res : pc;
+    assign alu_A = id_ex_rs1sel ? id_ex_pc : e_rs1data;
+    assign mux_B = e_rs2data;
+    assign alu_B = id_ex_rs2sel ? id_ex_imm : mux_B;
 
     // Logic hole 6 (LH6): Please see execute.sv for details on LH6
     // Execute instantiation
@@ -168,14 +263,14 @@ module rv_core #(
       .DWIDTH(DWIDTH),
       .AWIDTH(AWIDTH)
     ) e_alu1 (
-      .pc_i(d_pc),
+      .pc_i(id_ex_pc),
       .rs1_i(alu_A),
       .rs2_i(alu_B),
-      .funct3_i(d_funct3),
-      .funct7_i(d_funct7),
-      .opcode_i(d_opcode),
-      .imm_i(d_imm),
-      .alusel_i(c_alusel),
+      .funct3_i(id_ex_insn[14:12]),
+      .funct7_i(id_ex_insn[31:25]),
+      .opcode_i(id_ex_insn[6:0]),
+      .imm_i(id_ex_imm),
+      .alusel_i(id_ex_alusel),
       .res_o(e_res),
       .brtaken_o(e_brtaken)
     );
@@ -183,11 +278,9 @@ module rv_core #(
     // ---------- MEMORY STAGE ---------- //
     logic insn_en;
     logic [DWIDTH-1:0] m_data_o;
-    logic [DWIDTH-1:0] mem_data;
 
     // Read instruction from memory only if no reset.
     assign insn_en = 1'b1;
-    assign mem_data = mux_B;
 
     // Memory instantiation
     memory #(
@@ -199,11 +292,11 @@ module rv_core #(
         .clk(clk),
         .rst(reset),
         .pc_i(pc),
-        .addr_i(e_res),
-        .data_i(mem_data),
-        .funct3_i(d_funct3),
-        .memren_i(c_memren),
-        .memwren_i(c_memwren),
+        .addr_i(ex_mem_result),
+        .data_i(m_store_data),
+        .funct3_i(ex_mem_insn[14:12]),
+        .memren_i(ex_mem_memren),
+        .memwren_i(ex_mem_memwren),
         .insnen_i(insn_en),
         .insn_o(f_insn),
         .data_o(m_data_o)
@@ -211,24 +304,20 @@ module rv_core #(
 
     // ---------- WRITEBACK STAGE ------- //
     // Logic hole 7 (LH7): Please see writeback.sv for details on LH7
-    // write back signals
-    logic [DWIDTH-1:0] wb_data;
     // write back instantiation
     writeback #(
       .DWIDTH(DWIDTH),
       .AWIDTH(AWIDTH)
     ) wb_wb1 (
-      .pc_i(d_pc),
-      .alu_res_i(e_res),
-      .memory_data_i(m_data_o),
-      .wbsel_i(c_wbsel),
-      .imm_i(d_imm),
+      .pc_i(mem_wb_pc),
+      .alu_res_i(mem_wb_result),
+      .memory_data_i(mem_wb_load_data),
+      .wbsel_i(mem_wb_wbsel),
+      .imm_i(mem_wb_imm),
       .writeback_data_o(wb_data)
     );
 
     // ---------- REGISTER FILE ------- //
-    // register file signals
-    logic [DWIDTH - 1:0] r_rs1data, r_rs2data;
     // Register file instantiation
     register_file #(
       .DWIDTH(DWIDTH)
@@ -237,12 +326,122 @@ module rv_core #(
       .rst(reset),
       .rs1_i(d_rs1),
       .rs2_i(d_rs2),
-      .rd_i(d_rd),
+      .rd_i(mem_wb_rd),
       .datawb_i(wb_data),
-      .regwren_i(c_regwren),
+      .regwren_i(mem_wb_regwren),
       .rs1data_o(r_rs1data),
       .rs2data_o(r_rs2data)
     );
+
+    // Use WB data when Decode reads the same register.
+    assign d_rs1data = (mem_wb_regwren && mem_wb_rd != 0 &&
+                        mem_wb_rd == d_rs1) ? wb_data : r_rs1data;
+    assign d_rs2data = (mem_wb_regwren && mem_wb_rd != 0 &&
+                        mem_wb_rd == d_rs2) ? wb_data : r_rs2data;
+
+    // IF/ID
+    always_ff @(posedge clk) begin
+        if (reset || flush) begin
+            if_id_pc <= '0;
+            if_id_insn <= `NOP;
+        end
+        else if (!stall) begin
+            if_id_pc <= pc;
+            if_id_insn <= f_insn;
+        end
+    end
+
+    // ID/EX
+    always_ff @(posedge clk) begin
+        if (reset || flush || stall) begin
+            id_ex_pc <= '0;
+            id_ex_insn <= `NOP;
+            id_ex_rs1data <= '0;
+            id_ex_rs2data <= '0;
+            id_ex_imm <= '0;
+            id_ex_rs1 <= '0;
+            id_ex_rs2 <= '0;
+            id_ex_rd <= '0;
+            id_ex_pcsel <= 1'b0;
+            id_ex_regwren <= 1'b0;
+            id_ex_rs1sel <= 1'b0;
+            id_ex_rs2sel <= 1'b0;
+            id_ex_memren <= 1'b0;
+            id_ex_memwren <= 1'b0;
+            id_ex_wbsel <= '0;
+            id_ex_alusel <= '0;
+        end
+        else begin
+            id_ex_pc <= if_id_pc;
+            id_ex_insn <= if_id_insn;
+            id_ex_rs1data <= d_rs1data;
+            id_ex_rs2data <= d_rs2data;
+            id_ex_imm <= d_imm;
+            id_ex_rs1 <= d_rs1;
+            id_ex_rs2 <= d_rs2;
+            id_ex_rd <= d_rd;
+            id_ex_pcsel <= c_pcsel;
+            id_ex_regwren <= c_regwren;
+            id_ex_rs1sel <= c_rs1sel;
+            id_ex_rs2sel <= c_rs2sel;
+            id_ex_memren <= c_memren;
+            id_ex_memwren <= c_memwren;
+            id_ex_wbsel <= c_wbsel;
+            id_ex_alusel <= c_alusel;
+        end
+    end
+
+    // EX/MEM
+    always_ff @(posedge clk) begin
+        if (reset) begin
+            ex_mem_pc <= '0;
+            ex_mem_insn <= `NOP;
+            ex_mem_result <= '0;
+            ex_mem_store_data <= '0;
+            ex_mem_imm <= '0;
+            ex_mem_rs2 <= '0;
+            ex_mem_rd <= '0;
+            ex_mem_regwren <= 1'b0;
+            ex_mem_memren <= 1'b0;
+            ex_mem_memwren <= 1'b0;
+            ex_mem_wbsel <= '0;
+        end
+        else begin
+            ex_mem_pc <= id_ex_pc;
+            ex_mem_insn <= id_ex_insn;
+            ex_mem_result <= e_res;
+            ex_mem_store_data <= mux_B;
+            ex_mem_imm <= id_ex_imm;
+            ex_mem_rs2 <= id_ex_rs2;
+            ex_mem_rd <= id_ex_rd;
+            ex_mem_regwren <= id_ex_regwren;
+            ex_mem_memren <= id_ex_memren;
+            ex_mem_memwren <= id_ex_memwren;
+            ex_mem_wbsel <= id_ex_wbsel;
+        end
+    end
+
+    // MEM/WB
+    always_ff @(posedge clk) begin
+        if (reset) begin
+            mem_wb_pc <= '0;
+            mem_wb_result <= '0;
+            mem_wb_load_data <= '0;
+            mem_wb_imm <= '0;
+            mem_wb_rd <= '0;
+            mem_wb_regwren <= 1'b0;
+            mem_wb_wbsel <= '0;
+        end
+        else begin
+            mem_wb_pc <= ex_mem_pc;
+            mem_wb_result <= ex_mem_result;
+            mem_wb_load_data <= m_data_o;
+            mem_wb_imm <= ex_mem_imm;
+            mem_wb_rd <= ex_mem_rd;
+            mem_wb_regwren <= ex_mem_regwren;
+            mem_wb_wbsel <= ex_mem_wbsel;
+        end
+    end
 
     // This is to get yosys to synthesize the design
     assign busy = (c_regwren || c_memren || c_memwren);
