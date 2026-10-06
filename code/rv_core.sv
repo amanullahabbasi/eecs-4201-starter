@@ -32,14 +32,6 @@ module rv_core #(
     logic [4:0] id_ex_rs1;
     logic [4:0] id_ex_rs2;
     logic [4:0] id_ex_rd;
-    logic id_ex_pcsel;
-    logic id_ex_regwren;
-    logic id_ex_rs1sel;
-    logic id_ex_rs2sel;
-    logic id_ex_memren;
-    logic id_ex_memwren;
-    logic [1:0] id_ex_wbsel;
-    logic [3:0] id_ex_alusel;
 
     // EX/MEM registers
     logic [AWIDTH-1:0] ex_mem_pc;
@@ -49,10 +41,6 @@ module rv_core #(
     logic [DWIDTH-1:0] ex_mem_imm;
     logic [4:0] ex_mem_rs2;
     logic [4:0] ex_mem_rd;
-    logic ex_mem_regwren;
-    logic ex_mem_memren;
-    logic ex_mem_memwren;
-    logic [1:0] ex_mem_wbsel;
 
     // MEM/WB registers
     logic [AWIDTH-1:0] mem_wb_pc;
@@ -60,8 +48,22 @@ module rv_core #(
     logic [DWIDTH-1:0] mem_wb_load_data;
     logic [DWIDTH-1:0] mem_wb_imm;
     logic [4:0] mem_wb_rd;
-    logic mem_wb_regwren;
-    logic [1:0] mem_wb_wbsel;
+
+    logic x_pcsel;
+    logic x_immsel;
+    logic x_regwren;
+    logic x_rs1sel;
+    logic x_rs2sel;
+    logic x_memren;
+    logic x_memwren;
+    logic [1:0] x_wbsel;
+    logic [3:0] x_alusel;
+    logic m_regwren;
+    logic m_memren;
+    logic m_memwren;
+    logic [1:0] m_wbsel;
+    logic w_regwren;
+    logic [1:0] w_wbsel;
 
     // ---------- FETCH STAGE ----------- //
     // Logic hole 1 (LH1) : In fetch, determining next PC on a jump/branch
@@ -78,7 +80,6 @@ module rv_core #(
     logic jump_branch;
 
     // stall and flush logic instantiation
-    // For stage 1, you do not need to modify this
     stall_flush_logic stall_flush (
         .hazard_i(hazard),
         .br_jump_i(jump_branch),
@@ -192,6 +193,42 @@ module rv_core #(
         .alusel_o(c_alusel)
     );
 
+
+    control_pipeline control_pipe (
+        .clk(clk),
+        .rst(reset),
+        .idex_en_i(idex_en),
+        .idex_clear_i(idex_clear),
+        .exmem_en_i(exmem_en),
+        .exmem_clear_i(exmem_clear),
+        .memwb_en_i(memwb_en),
+        .memwb_clear_i(memwb_clear),
+        .pcsel_i(c_pcsel),
+        .immsel_i(c_immsel),
+        .regwren_i(c_regwren),
+        .rs1sel_i(c_rs1sel),
+        .rs2sel_i(c_rs2sel),
+        .memren_i(c_memren),
+        .memwren_i(c_memwren),
+        .wbsel_i(c_wbsel),
+        .alusel_i(c_alusel),
+        .x_pcsel_o(x_pcsel),
+        .x_immsel_o(x_immsel),
+        .x_regwren_o(x_regwren),
+        .x_rs1sel_o(x_rs1sel),
+        .x_rs2sel_o(x_rs2sel),
+        .x_memren_o(x_memren),
+        .x_memwren_o(x_memwren),
+        .x_wbsel_o(x_wbsel),
+        .x_alusel_o(x_alusel),
+        .m_regwren_o(m_regwren),
+        .m_memren_o(m_memren),
+        .m_memwren_o(m_memwren),
+        .m_wbsel_o(m_wbsel),
+        .w_regwren_o(w_regwren),
+        .w_wbsel_o(w_wbsel)
+    );
+
     // ---------- EXECUTE STAGE --------- //
     // execute signals
     logic [DWIDTH - 1:0] alu_A, alu_B, mux_B, e_res;
@@ -207,7 +244,7 @@ module rv_core #(
         .d_rs1_i(d_rs1),
         .d_rs2_i(d_rs2),
         .x_rd_i(id_ex_rd),
-        .x_memren_i(id_ex_memren),
+        .x_memren_i(x_memren),
         .stall_o(hazard)
     );
 
@@ -218,7 +255,7 @@ module rv_core #(
         .pc_i(ex_mem_pc),
         .alu_res_i(ex_mem_result),
         .memory_data_i('0),
-        .wbsel_i(ex_mem_wbsel),
+        .wbsel_i(m_wbsel),
         .imm_i(ex_mem_imm),
         .writeback_data_o(m_forward_data)
     );
@@ -229,9 +266,9 @@ module rv_core #(
         .x_rs1_i(id_ex_rs1),
         .x_rs2_i(id_ex_rs2),
         .m_rd_i(ex_mem_rd),
-        .m_regwren_i(ex_mem_regwren),
+        .m_regwren_i(m_regwren && !m_memren),
         .w_rd_i(mem_wb_rd),
-        .w_regwren_i(mem_wb_regwren),
+        .w_regwren_i(w_regwren),
         .forward_a_sel_o(forward_a_sel),
         .forward_b_sel_o(forward_b_sel)
     );
@@ -252,19 +289,18 @@ module rv_core #(
         endcase
     end
 
-    // Forward store data from WB when needed.
-    assign m_store_data = (mem_wb_regwren && mem_wb_rd != 0 &&
+    assign m_store_data = (w_regwren && mem_wb_rd != 0 &&
                            mem_wb_rd == ex_mem_rs2) ?
                           wb_data : ex_mem_store_data;
 
     // Logic hole 5 (LH5): Complete the logic to determine the inputs to the ALU
     //                     alu_A, mux_B, alu_B
 
-    assign jump_branch = id_ex_pcsel || e_brtaken;
+    assign jump_branch = x_pcsel || e_brtaken;
     assign f_pc = jump_branch ? e_res : pc;
-    assign alu_A = id_ex_rs1sel ? id_ex_pc : e_rs1data;
+    assign alu_A = x_rs1sel ? id_ex_pc : e_rs1data;
     assign mux_B = e_rs2data;
-    assign alu_B = id_ex_rs2sel ? id_ex_imm : mux_B;
+    assign alu_B = x_rs2sel ? id_ex_imm : mux_B;
 
     // Logic hole 6 (LH6): Please see execute.sv for details on LH6
     // Execute instantiation
@@ -279,7 +315,7 @@ module rv_core #(
       .funct7_i(id_ex_insn[31:25]),
       .opcode_i(id_ex_insn[6:0]),
       .imm_i(id_ex_imm),
-      .alusel_i(id_ex_alusel),
+      .alusel_i(x_alusel),
       .res_o(e_res),
       .brtaken_o(e_brtaken)
     );
@@ -304,8 +340,8 @@ module rv_core #(
         .addr_i(ex_mem_result),
         .data_i(m_store_data),
         .funct3_i(ex_mem_insn[14:12]),
-        .memren_i(ex_mem_memren),
-        .memwren_i(ex_mem_memwren),
+        .memren_i(m_memren),
+        .memwren_i(m_memwren),
         .insnen_i(insn_en),
         .insn_o(f_insn),
         .data_o(m_data_o)
@@ -321,7 +357,7 @@ module rv_core #(
       .pc_i(mem_wb_pc),
       .alu_res_i(mem_wb_result),
       .memory_data_i(mem_wb_load_data),
-      .wbsel_i(mem_wb_wbsel),
+      .wbsel_i(w_wbsel),
       .imm_i(mem_wb_imm),
       .writeback_data_o(wb_data)
     );
@@ -337,15 +373,14 @@ module rv_core #(
       .rs2_i(d_rs2),
       .rd_i(mem_wb_rd),
       .datawb_i(wb_data),
-      .regwren_i(mem_wb_regwren),
+      .regwren_i(w_regwren),
       .rs1data_o(r_rs1data),
       .rs2data_o(r_rs2data)
     );
 
-    // Use WB data when Decode reads the same register.
-    assign d_rs1data = (mem_wb_regwren && mem_wb_rd != 0 &&
+    assign d_rs1data = (w_regwren && mem_wb_rd != 0 &&
                         mem_wb_rd == d_rs1) ? wb_data : r_rs1data;
-    assign d_rs2data = (mem_wb_regwren && mem_wb_rd != 0 &&
+    assign d_rs2data = (w_regwren && mem_wb_rd != 0 &&
                         mem_wb_rd == d_rs2) ? wb_data : r_rs2data;
 
     // IF/ID
@@ -371,14 +406,6 @@ module rv_core #(
             id_ex_rs1 <= '0;
             id_ex_rs2 <= '0;
             id_ex_rd <= '0;
-            id_ex_pcsel <= 1'b0;
-            id_ex_regwren <= 1'b0;
-            id_ex_rs1sel <= 1'b0;
-            id_ex_rs2sel <= 1'b0;
-            id_ex_memren <= 1'b0;
-            id_ex_memwren <= 1'b0;
-            id_ex_wbsel <= '0;
-            id_ex_alusel <= '0;
         end
         else if (idex_en) begin
             id_ex_pc <= if_id_pc;
@@ -389,14 +416,6 @@ module rv_core #(
             id_ex_rs1 <= d_rs1;
             id_ex_rs2 <= d_rs2;
             id_ex_rd <= d_rd;
-            id_ex_pcsel <= c_pcsel;
-            id_ex_regwren <= c_regwren;
-            id_ex_rs1sel <= c_rs1sel;
-            id_ex_rs2sel <= c_rs2sel;
-            id_ex_memren <= c_memren;
-            id_ex_memwren <= c_memwren;
-            id_ex_wbsel <= c_wbsel;
-            id_ex_alusel <= c_alusel;
         end
     end
 
@@ -410,10 +429,6 @@ module rv_core #(
             ex_mem_imm <= '0;
             ex_mem_rs2 <= '0;
             ex_mem_rd <= '0;
-            ex_mem_regwren <= 1'b0;
-            ex_mem_memren <= 1'b0;
-            ex_mem_memwren <= 1'b0;
-            ex_mem_wbsel <= '0;
         end
         else if (exmem_clear) begin
             ex_mem_pc <= '0;
@@ -423,23 +438,15 @@ module rv_core #(
             ex_mem_imm <= '0;
             ex_mem_rs2 <= '0;
             ex_mem_rd <= '0;
-            ex_mem_regwren <= 1'b0;
-            ex_mem_memren <= 1'b0;
-            ex_mem_memwren <= 1'b0;
-            ex_mem_wbsel <= '0;
         end
         else if (exmem_en) begin
             ex_mem_pc <= id_ex_pc;
             ex_mem_insn <= id_ex_insn;
             ex_mem_result <= e_res;
-            ex_mem_store_data <= mux_B;
+            ex_mem_store_data <= e_rs2data;
             ex_mem_imm <= id_ex_imm;
             ex_mem_rs2 <= id_ex_rs2;
             ex_mem_rd <= id_ex_rd;
-            ex_mem_regwren <= id_ex_regwren;
-            ex_mem_memren <= id_ex_memren;
-            ex_mem_memwren <= id_ex_memwren;
-            ex_mem_wbsel <= id_ex_wbsel;
         end
     end
 
@@ -451,8 +458,6 @@ module rv_core #(
             mem_wb_load_data <= '0;
             mem_wb_imm <= '0;
             mem_wb_rd <= '0;
-            mem_wb_regwren <= 1'b0;
-            mem_wb_wbsel <= '0;
         end
         else if (memwb_clear) begin
             mem_wb_pc <= '0;
@@ -460,8 +465,6 @@ module rv_core #(
             mem_wb_load_data <= '0;
             mem_wb_imm <= '0;
             mem_wb_rd <= '0;
-            mem_wb_regwren <= 1'b0;
-            mem_wb_wbsel <= '0;
         end
         else if (memwb_en) begin
             mem_wb_pc <= ex_mem_pc;
@@ -469,8 +472,6 @@ module rv_core #(
             mem_wb_load_data <= m_data_o;
             mem_wb_imm <= ex_mem_imm;
             mem_wb_rd <= ex_mem_rd;
-            mem_wb_regwren <= ex_mem_regwren;
-            mem_wb_wbsel <= ex_mem_wbsel;
         end
     end
 

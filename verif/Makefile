@@ -36,12 +36,6 @@ LINE_COUNT := $(strip $(shell [ -f "$(FULL_PATH)" ] && grep -c '[^[:space:]]' "$
 # Automatically collect all .sv files in design/code/
 DESIGN_SRCS := $(wildcard $(DESIGN_DIR)/*.sv)
 
-# Automatically inspect hut.sv for signals before compiling
-HAS_STALL := $(shell grep -E -q '\bstall\b'  path/to/hut.sv && echo "-DHAS_STALL_SIGNAL")
-HAS_FLUSH := $(shell grep -E -q '\bflush\b'  path/to/hut.sv && echo "-DHAS_FLUSH_SIGNAL")
-
-EXTRA_FLAGS += $(HAS_FLUSH) $(HAS_STALL)
-
 .PHONY: all clean help run run-all sim sim-all $(SIM_DIR)
 
 all: sim-all
@@ -69,6 +63,7 @@ EXTRA_FLAGS += $(HAS_STALL) $(HAS_FLUSH)
 
 # --- VERILATOR BUILD ---
 compile-tb: $(SIM_DIR)
+	@rm -rf $(OBJ_DIR)
 	@if [ "$(QUIET_BUILD)" != "1" ]; then \
 		echo "------------------------------------------------------------"; \
 		echo "Building testbench binary: V$(TOP_MODULE) using $(TB_SRC)"; \
@@ -99,7 +94,7 @@ compile-tb: $(SIM_DIR)
 # --- SIMULATION EXECUTION ---
 run: compile-tb
 	@LOG_FILE="$(VERIF_DIR)/_results.txt"; \
-	$(OBJ_DIR)/Vtop_tb > sim_out.tmp 2>&1; \
+	$(OBJ_DIR)/Vtop_tb +MEM_PATH="$(FULL_PATH)" > sim_out.tmp 2>&1; \
 	TIMESTAMP=$$(date '+%Y-%m-%d %H:%M:%S'); \
 	CYCLES=$$(sed -n 's/.*Total Cycles[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' sim_out.tmp | tail -n1); \
 	STALLS=$$(sed -n 's/.*Stalls[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' sim_out.tmp | tail -n1); \
@@ -135,7 +130,7 @@ else
 		name=$$(basename $${xfile%.x}); \
 		echo ""; \
 		echo "  >> Simulating: $$name"; \
-		$(MAKE) --no-print-directory run TEST_DIR=$(TEST_DIR) TEST=$$name DT=$(DT) QUIET_BUILD=1; \
+		$(MAKE) -C $(VERIF_DIR) --no-print-directory run TEST_DIR=$(TEST_DIR) TEST=$$name DT=$(DT) QUIET_BUILD=1 || exit $$?; \
 	done
 endif
 
@@ -145,9 +140,9 @@ ifndef TEST_DIR
 	$(error TEST_DIR is required. Usage: make sim TEST_DIR=<folder> [TEST=<test_name>] [DT=1])
 endif
 	@if [ -z "$(TEST)" ]; then \
-		$(MAKE) run-all TEST_DIR=$(TEST_DIR) DT=$(DT); \
+		$(MAKE) -C $(VERIF_DIR) run-all TEST_DIR=$(TEST_DIR) DT=$(DT); \
 	else \
-		$(MAKE) run TEST_DIR=$(TEST_DIR) TEST=$(TEST) DT=$(DT) QUIET_BUILD=1; \
+		$(MAKE) -C $(VERIF_DIR) run TEST_DIR=$(TEST_DIR) TEST=$(TEST) DT=$(DT) QUIET_BUILD=1; \
 	fi
 
 sim-all:
@@ -156,7 +151,7 @@ sim-all:
 	@echo "------------------------------------------------------------"
 	@for dir in $(ALL_TEST_DIRS); do \
 		echo $$dir; \
-		$(MAKE) run-all TEST_DIR=$$dir DT=$(DT); \
+		$(MAKE) -C $(VERIF_DIR) run-all TEST_DIR=$$dir DT=$(DT); \
 		mv obj_dir obj_dir_$$dir; \
 	done
 

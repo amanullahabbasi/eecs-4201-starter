@@ -119,6 +119,12 @@ module hazard_forwarding_stall_tb;
         check(s_exmem_en && !s_exmem_clear, "sfl flush exmem");
         check(s_memwb_en && !s_memwb_clear, "sfl flush memwb");
 
+        s_hazard = 1'b1;
+        s_br_jump = 1'b1;
+        #1;
+        check(s_pc_en && !s_stall && s_flush, "sfl flush beats stall");
+        check(s_idex_clear, "sfl flush hazard bubble");
+
         if (errors == 0) begin
             $display("hazard_forwarding_stall_tb passed");
         end else begin
