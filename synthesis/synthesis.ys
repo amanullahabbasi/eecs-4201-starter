@@ -1,11 +1,7 @@
 #!/bin/bash
 
-plugin -i slang
-
 # first setup the include paths
-verilog_defaults -add -Icode/
-
-read_slang -Icode \
+read_verilog -sv -Icode \
     code/branch_control.sv \
     code/decode.sv \
     code/execute.sv \
@@ -18,7 +14,10 @@ read_slang -Icode \
     code/register_file.sv \
     code/stall_flush_logic.sv \
     code/writeback.sv \
-    code/rv_core.sv 
+    code/forwarding_unit.sv \
+    code/hazard_detection_unit.sv \
+    code/control_pipeline.sv \
+    code/rv_core.sv
 
     echo on
     hierarchy -check -top rv_core
@@ -32,8 +31,9 @@ read_slang -Icode \
     techmap; opt 
     flatten; opt
     dfflibmap -liberty synthesis/sky130nm.lib
-    abc -liberty synthesis/sky130nm.lib
+    abc -liberty synthesis/sky130nm.lib -D 10000 -script "+strash;dch;map -B 0.9;topo;stime -c;buffer -c;upsize -c;dnsize -c;stime -p"
     setundef -zero
     write_verilog synth.v
     write_json synth.json
-    stat
+    stat -liberty synthesis/sky130nm.lib
+    exec -- sta -exit synthesis/timing.tcl

@@ -111,4 +111,8 @@ parameter logic [31:0] ZERO = 32'd0;
 `define WB_PC4 2'b10
 `define WB_IMM 2'b11
 
+`define FWD_NONE   2'b00
+`define FWD_MEM_WB 2'b01
+`define FWD_EX_MEM 2'b10
+
 `endif
