@@ -24,10 +24,10 @@
 
 module main_memory #(
     // parameters
-    parameter int AWIDTH = 32,
-    parameter int DWIDTH = 32,
-    parameter int LINECOUNT = 1000,
-    parameter logic [31:0] BASE_ADDR = 32'h01000000
+    parameter AWIDTH = 32,
+    parameter DWIDTH = 32,
+    parameter LINECOUNT = 1000,
+    parameter BASE_ADDR = 32'h01000000
 ) (
     // inputs
     input  logic clk,
@@ -112,7 +112,7 @@ module main_memory #(
 
     // Shift byte address from memory controller to word index for memory
     logic [AWIDTH-1:0] address;
-    assign address = addr_i >> $clog2(AWIDTH/8);
+    assign address = addr_i >> 2;
 
     //---------- Memory Data Read ----------//
     always_comb begin
