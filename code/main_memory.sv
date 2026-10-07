@@ -46,19 +46,20 @@ module main_memory #(
 );
 
     // Word-addressable memory
-    `ifdef SYNTHESIS
-    localparam int MEM_BYTES = 1024;
+`ifdef SYNTHESIS
+    localparam MEM_BYTES = 1024;
+    localparam MEM_WORDS = 256;
 `else
-    localparam int MEM_BYTES = `MEM_DEPTH;
+    localparam MEM_BYTES = `MEM_DEPTH;
+    localparam MEM_WORDS = MEM_BYTES / (DWIDTH/8);
 `endif
-    localparam int MEM_WORDS = MEM_BYTES / (DWIDTH/8);
 
     logic [DWIDTH-1:0] main_memory [0:MEM_WORDS-1];
 
+`ifndef SYNTHESIS
     // Temporary memory for loading program
     logic [DWIDTH-1:0] temp_memory [0:LINECOUNT - 1];
 
-`ifndef SYNTHESIS
     // Initialization of memory from program
     initial begin
         string mem_path;
