@@ -1,0 +1,30 @@
+name: Stage 2 smoke tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verilator-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Verilator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator make g++
+
+      - name: Instruction benchmark smoke test
+        run: make -C verif sim TEST_DIR=insn-bmarks TEST=rv32ui-p-add VERILATOR="verilator -Wno-fatal"
+
+      - name: Sample benchmark smoke test
+        run: make -C verif sim TEST_DIR=sample-bmarks TEST=test1 VERILATOR="verilator -Wno-fatal"
+
+      - name: Control pipeline testbench
+        run: make -C verif tb-control_pipeline_tb VERILATOR="verilator -Wno-fatal"
+
+      - name: Hazard and forwarding testbench
+        run: make -C verif tb-hazard_forwarding_stall_tb VERILATOR="verilator -Wno-fatal"

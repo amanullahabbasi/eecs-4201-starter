@@ -15,6 +15,7 @@ module top_tb;
 
    logic clk = 0;
    logic rst = 1;
+   logic busy;
    always #1 clk = ~clk;
 
    localparam int DWIDTH = 32;
@@ -25,7 +26,8 @@ module top_tb;
       .DWIDTH(DWIDTH)
    ) hut (
       .clk(clk),
-      .reset(rst)
+      .reset(rst),
+      .busy(busy)
    );
 
    

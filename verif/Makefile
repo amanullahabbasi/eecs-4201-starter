@@ -179,6 +179,7 @@ tb-%: $(SIM_DIR)
 		-y $(DESIGN_DIR) \
 		+librescan \
 		-I$(VERIF_DIR) \
+		-I$(DESIGN_DIR) \
 		--top-module $* \
 		$(TRACE_FLAGS) \
 		$(VERIF_DIR)/$*.sv \
