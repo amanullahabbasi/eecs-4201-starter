@@ -45,43 +45,22 @@ module control_pipeline (
     logic [12:0] m_ctrl;
     logic [12:0] w_ctrl;
 
-    always_comb begin
-        d_ctrl = '0;
-        d_ctrl[`PCSEL] = pcsel_i;
-        d_ctrl[`IMMSEL] = immsel_i;
-        d_ctrl[`REGWREN] = regwren_i;
-        d_ctrl[`RS1SEL] = rs1sel_i;
-        d_ctrl[`RS2SEL] = rs2sel_i;
-        d_ctrl[`MEMREN] = memren_i;
-        d_ctrl[`MEMWREN] = memwren_i;
-        d_ctrl[`WBSEL] = wbsel_i;
-        d_ctrl[`ALUSEL] = alusel_i;
+    assign d_ctrl = {alusel_i, wbsel_i, memwren_i, memren_i,
+                     rs2sel_i, rs1sel_i, regwren_i, immsel_i, pcsel_i};
+
+    always_ff @(posedge clk) begin
+        if (rst || idex_clear_i) x_ctrl <= '0;
+        else if (idex_en_i)     x_ctrl <= d_ctrl;
     end
 
     always_ff @(posedge clk) begin
-        if (rst) begin
-            x_ctrl <= '0;
-            m_ctrl <= '0;
-            w_ctrl <= '0;
-        end else begin
-            if (idex_clear_i) begin
-                x_ctrl <= '0;
-            end else if (idex_en_i) begin
-                x_ctrl <= d_ctrl;
-            end
+        if (rst || exmem_clear_i) m_ctrl <= '0;
+        else if (exmem_en_i)     m_ctrl <= x_ctrl;
+    end
 
-            if (exmem_clear_i) begin
-                m_ctrl <= '0;
-            end else if (exmem_en_i) begin
-                m_ctrl <= x_ctrl;
-            end
-
-            if (memwb_clear_i) begin
-                w_ctrl <= '0;
-            end else if (memwb_en_i) begin
-                w_ctrl <= m_ctrl;
-            end
-        end
+    always_ff @(posedge clk) begin
+        if (rst || memwb_clear_i) w_ctrl <= '0;
+        else if (memwb_en_i)     w_ctrl <= m_ctrl;
     end
 
     assign x_pcsel_o = x_ctrl[`PCSEL];

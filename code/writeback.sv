@@ -26,19 +26,24 @@
      input logic [DWIDTH-1:0] imm_i,
      output logic [DWIDTH-1:0] writeback_data_o
  );
-    /* Logic hole 7 (LH7): Determine the data to write-back to register file based on
-                           wbsel control signal
-    */
-    always_comb begin
-        // Muxing the source of writeback data.
-        case (wbsel_i)
-            `WB_ALU: writeback_data_o = alu_res_i;
-            `WB_MEM: writeback_data_o = memory_data_i;
-            `WB_PC4: writeback_data_o = pc_i + 32'd4;
-            `WB_IMM: writeback_data_o = imm_i;
-
-            default: writeback_data_o = alu_res_i;
+    function automatic logic [DWIDTH-1:0] writeback_data(
+        input logic [1:0] wbsel,
+        input logic [AWIDTH-1:0] pc,
+        input logic [DWIDTH-1:0] alu_res,
+        input logic [DWIDTH-1:0] memory_data,
+        input logic [DWIDTH-1:0] imm
+    );
+        case (wbsel)
+            `WB_ALU: writeback_data = alu_res;
+            `WB_MEM: writeback_data = memory_data;
+            `WB_PC4: writeback_data = pc + 32'd4;
+            `WB_IMM: writeback_data = imm;
+            default: writeback_data = alu_res;
         endcase
+    endfunction
+
+    always_comb begin
+        writeback_data_o = writeback_data(wbsel_i, pc_i, alu_res_i, memory_data_i, imm_i);
     end
 
 endmodule : writeback

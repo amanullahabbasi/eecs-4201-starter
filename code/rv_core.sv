@@ -49,6 +49,17 @@ module rv_core #(
     logic [DWIDTH-1:0] mem_wb_imm;
     logic [4:0] mem_wb_rd;
 
+    localparam int IDEX_WIDTH = AWIDTH + (4 * DWIDTH) + 15;
+    localparam int EXMEM_WIDTH = AWIDTH + (4 * DWIDTH) + 10;
+    localparam int MEMWB_WIDTH = AWIDTH + (3 * DWIDTH) + 5;
+
+    logic [IDEX_WIDTH-1:0] idex_next;
+    logic [IDEX_WIDTH-1:0] idex_bubble;
+    logic [EXMEM_WIDTH-1:0] exmem_next;
+    logic [EXMEM_WIDTH-1:0] exmem_bubble;
+    logic [MEMWB_WIDTH-1:0] memwb_next;
+    logic [MEMWB_WIDTH-1:0] memwb_bubble;
+
     logic x_pcsel;
     logic x_immsel;
     logic x_regwren;
@@ -395,84 +406,46 @@ module rv_core #(
         end
     end
 
+    assign idex_next = {if_id_pc, if_id_insn, d_rs1data, d_rs2data,
+                        d_imm, d_rs1, d_rs2, d_rd};
+    assign idex_bubble = {{AWIDTH{1'b0}}, `NOP, {DWIDTH{1'b0}},
+                          {DWIDTH{1'b0}}, {DWIDTH{1'b0}}, 5'd0, 5'd0, 5'd0};
+    assign exmem_next = {id_ex_pc, id_ex_insn, e_res, e_rs2data,
+                         id_ex_imm, id_ex_rs2, id_ex_rd};
+    assign exmem_bubble = {{AWIDTH{1'b0}}, `NOP, {DWIDTH{1'b0}},
+                           {DWIDTH{1'b0}}, {DWIDTH{1'b0}}, 5'd0, 5'd0};
+    assign memwb_next = {ex_mem_pc, ex_mem_result, m_data_o, ex_mem_imm, ex_mem_rd};
+    assign memwb_bubble = {{AWIDTH{1'b0}}, {DWIDTH{1'b0}},
+                           {DWIDTH{1'b0}}, {DWIDTH{1'b0}}, 5'd0};
+
     // ID/EX
     always_ff @(posedge clk) begin
-        if (reset || idex_clear) begin
-            id_ex_pc <= '0;
-            id_ex_insn <= `NOP;
-            id_ex_rs1data <= '0;
-            id_ex_rs2data <= '0;
-            id_ex_imm <= '0;
-            id_ex_rs1 <= '0;
-            id_ex_rs2 <= '0;
-            id_ex_rd <= '0;
-        end
-        else if (idex_en) begin
-            id_ex_pc <= if_id_pc;
-            id_ex_insn <= if_id_insn;
-            id_ex_rs1data <= d_rs1data;
-            id_ex_rs2data <= d_rs2data;
-            id_ex_imm <= d_imm;
-            id_ex_rs1 <= d_rs1;
-            id_ex_rs2 <= d_rs2;
-            id_ex_rd <= d_rd;
-        end
+        if (reset || idex_clear)
+            {id_ex_pc, id_ex_insn, id_ex_rs1data, id_ex_rs2data,
+             id_ex_imm, id_ex_rs1, id_ex_rs2, id_ex_rd} <= idex_bubble;
+        else if (idex_en)
+            {id_ex_pc, id_ex_insn, id_ex_rs1data, id_ex_rs2data,
+             id_ex_imm, id_ex_rs1, id_ex_rs2, id_ex_rd} <= idex_next;
     end
 
     // EX/MEM
     always_ff @(posedge clk) begin
-        if (reset) begin
-            ex_mem_pc <= '0;
-            ex_mem_insn <= `NOP;
-            ex_mem_result <= '0;
-            ex_mem_store_data <= '0;
-            ex_mem_imm <= '0;
-            ex_mem_rs2 <= '0;
-            ex_mem_rd <= '0;
-        end
-        else if (exmem_clear) begin
-            ex_mem_pc <= '0;
-            ex_mem_insn <= `NOP;
-            ex_mem_result <= '0;
-            ex_mem_store_data <= '0;
-            ex_mem_imm <= '0;
-            ex_mem_rs2 <= '0;
-            ex_mem_rd <= '0;
-        end
-        else if (exmem_en) begin
-            ex_mem_pc <= id_ex_pc;
-            ex_mem_insn <= id_ex_insn;
-            ex_mem_result <= e_res;
-            ex_mem_store_data <= e_rs2data;
-            ex_mem_imm <= id_ex_imm;
-            ex_mem_rs2 <= id_ex_rs2;
-            ex_mem_rd <= id_ex_rd;
-        end
+        if (reset || exmem_clear)
+            {ex_mem_pc, ex_mem_insn, ex_mem_result, ex_mem_store_data,
+             ex_mem_imm, ex_mem_rs2, ex_mem_rd} <= exmem_bubble;
+        else if (exmem_en)
+            {ex_mem_pc, ex_mem_insn, ex_mem_result, ex_mem_store_data,
+             ex_mem_imm, ex_mem_rs2, ex_mem_rd} <= exmem_next;
     end
 
     // MEM/WB
     always_ff @(posedge clk) begin
-        if (reset) begin
-            mem_wb_pc <= '0;
-            mem_wb_result <= '0;
-            mem_wb_load_data <= '0;
-            mem_wb_imm <= '0;
-            mem_wb_rd <= '0;
-        end
-        else if (memwb_clear) begin
-            mem_wb_pc <= '0;
-            mem_wb_result <= '0;
-            mem_wb_load_data <= '0;
-            mem_wb_imm <= '0;
-            mem_wb_rd <= '0;
-        end
-        else if (memwb_en) begin
-            mem_wb_pc <= ex_mem_pc;
-            mem_wb_result <= ex_mem_result;
-            mem_wb_load_data <= m_data_o;
-            mem_wb_imm <= ex_mem_imm;
-            mem_wb_rd <= ex_mem_rd;
-        end
+        if (reset || memwb_clear)
+            {mem_wb_pc, mem_wb_result, mem_wb_load_data,
+             mem_wb_imm, mem_wb_rd} <= memwb_bubble;
+        else if (memwb_en)
+            {mem_wb_pc, mem_wb_result, mem_wb_load_data,
+             mem_wb_imm, mem_wb_rd} <= memwb_next;
     end
 
     // This is to get yosys to synthesize the design

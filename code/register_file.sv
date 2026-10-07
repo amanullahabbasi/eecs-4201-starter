@@ -36,23 +36,12 @@
      * Create a DWITDH array of logic register of width DWIDTH
      */
     logic [DWIDTH - 1:0] x [31:0];
-    // Sequential procedural block for writing to register file
-    // regwren_i must be high
     always_ff @(posedge clk) begin
-        // Reset contents of register file on reset signal
         if (rst) begin
-            // initialize all register to zero on reset high
-            for (int i = 0; i < 32; i++) begin
-                x[i] <= {DWIDTH{1'b0}};
-            end
-            // intialized sp to the highest memory address, base address + 1MB
+            for (int i = 0; i < 32; i++) x[i] <= {DWIDTH{1'b0}};
             x[2] <= 32'h01100000;
         end
-        // Writing back to the register file,
-        // the rd_i != 0 prevents writing over the x0 register
-        else if (regwren_i && rd_i != 0) begin
-            x[rd_i] <= datawb_i;
-        end
+        else if (regwren_i && rd_i != 0) x[rd_i] <= datawb_i;
     end
 
     // Combinational procedural block for reading from the register file

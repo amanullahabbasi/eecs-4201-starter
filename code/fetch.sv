@@ -17,7 +17,7 @@ module fetch #(
   input logic [AWIDTH - 1:0] next_pc_i,
   input logic pc_en_i,
   input logic jump_branch_i,
-	// outputs	
+	// outputs
 	output logic [AWIDTH - 1:0] pc_o,
   output logic [DWIDTH - 1:0] insn_o
 );
@@ -26,19 +26,12 @@ module fetch #(
     assign pc_o = (rst) ? '0 : pc;
 
     always_ff @(posedge clk) begin
-        if (rst) begin
-            pc <= BASEADDR;
-        end
+        if (rst) pc <= BASEADDR;
         else if (pc_en_i) begin
-            if (jump_branch_i) begin
-                pc <= next_pc_i;
-            end
-            else begin
-                pc <= next_pc_i + 32'd4;
-            end
+            pc <= jump_branch_i ? next_pc_i : next_pc_i + 32'd4;
         end
     end
 
 endmodule : fetch
-				
+
 

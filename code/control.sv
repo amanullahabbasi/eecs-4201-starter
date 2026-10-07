@@ -51,111 +51,75 @@ module control #(
                        this logic.
 */
 
-    always_comb begin
-        pcsel_o   = 1'b0;
-        immsel_o  = 1'b0;
-        regwren_o = 1'b0;
-        rs1sel_o  = 1'b0;
-        rs2sel_o  = 1'b0;
-        memren_o  = 1'b0;
-        memwren_o = 1'b0;
-        wbsel_o   = `WB_ALU;
-        alusel_o  = `ALU_NOP;
+    logic [12:0] ctrl_bits;
 
-        case (opcode_i)
-            `R_TYPE: begin
-                regwren_o = 1'b1;
-                wbsel_o   = `WB_ALU;
-
-                case (funct3_i)
-                    `F3_ADD:    alusel_o = (funct7_i == `F7_SUB) ? `ALU_SUB : `ALU_ADD;
-                    `F3_XOR:    alusel_o = `ALU_XOR;
-                    `F3_OR:     alusel_o = `ALU_OR;
-                    `F3_AND:    alusel_o = `ALU_AND;
-                    `F3_SLEFT:  alusel_o = `ALU_SLL;
-                    `F3_SRIGHT: alusel_o = (funct7_i == `F7_SRA) ? `ALU_SRA : `ALU_SRL;
-                    `F3_SLT:    alusel_o = `ALU_SLT;
-                    `F3_SLTU:   alusel_o = `ALU_SLTU;
-                    default:    alusel_o = `ALU_NOP;
-                endcase
-            end
-
-            `I_TYPE: begin
-                regwren_o = 1'b1;
-                immsel_o  = 1'b1;
-                rs2sel_o  = 1'b1;
-                wbsel_o   = `WB_ALU;
-
-                case (funct3_i)
-                    `F3_ADD:    alusel_o = `ALU_ADD;
-                    `F3_XOR:    alusel_o = `ALU_XOR;
-                    `F3_OR:     alusel_o = `ALU_OR;
-                    `F3_AND:    alusel_o = `ALU_AND;
-                    `F3_SLEFT:  alusel_o = `ALU_SLL;
-                    `F3_SRIGHT: alusel_o = (funct7_i == `F7_SRA) ? `ALU_SRA : `ALU_SRL;
-                    `F3_SLT:    alusel_o = `ALU_SLT;
-                    `F3_SLTU:   alusel_o = `ALU_SLTU;
-                    default:    alusel_o = `ALU_NOP;
-                endcase
-            end
-
-            `I_TYPE_L: begin
-                regwren_o = 1'b1;
-                immsel_o  = 1'b1;
-                rs2sel_o  = 1'b1;
-                memren_o  = 1'b1;
-                wbsel_o   = `WB_MEM;
-                alusel_o  = `ALU_ADD;
-            end
-
-            `S_TYPE: begin
-                immsel_o  = 1'b1;
-                rs2sel_o  = 1'b1;
-                memwren_o = 1'b1;
-                alusel_o  = `ALU_ADD;
-            end
-
-            `B_TYPE: begin
-                alusel_o = `ALU_ADD;
-            end
-
-            `I_TYPE_JALR: begin
-                pcsel_o   = 1'b1;
-                regwren_o = 1'b1;
-                immsel_o  = 1'b1;
-                rs2sel_o  = 1'b1;
-                wbsel_o   = `WB_PC4;
-                alusel_o  = `ALU_ADD;
-            end
-
-            `J_TYPE: begin
-                pcsel_o   = 1'b1;
-                regwren_o = 1'b1;
-                immsel_o  = 1'b1;
-                rs1sel_o  = 1'b1;
-                rs2sel_o  = 1'b1;
-                wbsel_o   = `WB_PC4;
-                alusel_o  = `ALU_ADD;
-            end
-
-            `U_TYPE_LUI: begin
-                regwren_o = 1'b1;
-                wbsel_o   = `WB_IMM;
-            end
-
-            `U_TYPE_AUIPC: begin
-                regwren_o = 1'b1;
-                immsel_o  = 1'b1;
-                rs1sel_o  = 1'b1;
-                rs2sel_o  = 1'b1;
-                wbsel_o   = `WB_ALU;
-                alusel_o  = `ALU_ADD;
-            end
-
-            default: begin
-            end
+    function automatic logic [3:0] alu_rtype(
+        input logic [2:0] funct3,
+        input logic [6:0] funct7
+    );
+        case (funct3)
+            `F3_ADD:    alu_rtype = (funct7 == `F7_SUB) ? `ALU_SUB : `ALU_ADD;
+            `F3_XOR:    alu_rtype = `ALU_XOR;
+            `F3_OR:     alu_rtype = `ALU_OR;
+            `F3_AND:    alu_rtype = `ALU_AND;
+            `F3_SLEFT:  alu_rtype = `ALU_SLL;
+            `F3_SRIGHT: alu_rtype = (funct7 == `F7_SRA) ? `ALU_SRA : `ALU_SRL;
+            `F3_SLT:    alu_rtype = `ALU_SLT;
+            `F3_SLTU:   alu_rtype = `ALU_SLTU;
+            default:    alu_rtype = `ALU_NOP;
         endcase
+    endfunction
+
+    function automatic logic [3:0] alu_itype(
+        input logic [2:0] funct3,
+        input logic [6:0] funct7
+    );
+        case (funct3)
+            `F3_ADD:    alu_itype = `ALU_ADD;
+            `F3_XOR:    alu_itype = `ALU_XOR;
+            `F3_OR:     alu_itype = `ALU_OR;
+            `F3_AND:    alu_itype = `ALU_AND;
+            `F3_SLEFT:  alu_itype = `ALU_SLL;
+            `F3_SRIGHT: alu_itype = (funct7 == `F7_SRA) ? `ALU_SRA : `ALU_SRL;
+            `F3_SLT:    alu_itype = `ALU_SLT;
+            `F3_SLTU:   alu_itype = `ALU_SLTU;
+            default:    alu_itype = `ALU_NOP;
+        endcase
+    endfunction
+
+    function automatic logic [12:0] control_bits(
+        input logic [6:0] opcode,
+        input logic [2:0] funct3,
+        input logic [6:0] funct7
+    );
+        control_bits = {`ALU_NOP, `WB_ALU, 7'b0};
+        case (opcode)
+            `R_TYPE:      control_bits = {alu_rtype(funct3, funct7), `WB_ALU, 7'b0000100};
+            `I_TYPE:      control_bits = {alu_itype(funct3, funct7), `WB_ALU, 7'b0010110};
+            `I_TYPE_L:    control_bits = {`ALU_ADD, `WB_MEM, 7'b0110110};
+            `S_TYPE:      control_bits = {`ALU_ADD, `WB_ALU, 7'b1010010};
+            `B_TYPE:      control_bits = {`ALU_ADD, `WB_ALU, 7'b0000000};
+            `I_TYPE_JALR: control_bits = {`ALU_ADD, `WB_PC4, 7'b0010111};
+            `J_TYPE:      control_bits = {`ALU_ADD, `WB_PC4, 7'b0011111};
+            `U_TYPE_LUI:  control_bits = {`ALU_NOP, `WB_IMM, 7'b0000100};
+            `U_TYPE_AUIPC:control_bits = {`ALU_ADD, `WB_ALU, 7'b0011110};
+            default: ;
+        endcase
+    endfunction
+
+    always_comb begin
+        ctrl_bits = control_bits(opcode_i, funct3_i, funct7_i);
     end
+
+    assign pcsel_o   = ctrl_bits[`PCSEL];
+    assign immsel_o  = ctrl_bits[`IMMSEL];
+    assign regwren_o = ctrl_bits[`REGWREN];
+    assign rs1sel_o  = ctrl_bits[`RS1SEL];
+    assign rs2sel_o  = ctrl_bits[`RS2SEL];
+    assign memren_o  = ctrl_bits[`MEMREN];
+    assign memwren_o = ctrl_bits[`MEMWREN];
+    assign wbsel_o   = ctrl_bits[`WBSEL];
+    assign alusel_o  = ctrl_bits[`ALUSEL];
 
 endmodule : control
 
