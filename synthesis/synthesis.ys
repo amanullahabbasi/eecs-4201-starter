@@ -1,7 +1,11 @@
 #!/bin/bash
 
+plugin -i slang
+
 # first setup the include paths
-read_verilog -sv -Icode \
+verilog_defaults -add -Icode/
+
+read_slang -Icode \
     code/branch_control.sv \
     code/decode.sv \
     code/execute.sv \
@@ -36,4 +40,4 @@ read_verilog -sv -Icode \
     write_verilog synth.v
     write_json synth.json
     stat -liberty synthesis/sky130nm.lib
-    exec -- sta -exit synthesis/timing.tcl
+    exec -expect-return 0 -- sta -exit synthesis/timing.tcl
