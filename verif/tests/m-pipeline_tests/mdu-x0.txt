@@ -1,0 +1,21 @@
+# rd = x0: the result is discarded and never forwarded
+addi x5,x0,7
+addi x6,x0,6
+mul x0,x5,x6
+add x7,x0,x0
+div x0,x5,x6
+add x8,x0,x5
+bne x7,x0,fail
+bne x8,x5,fail
+# pass: x1 = 1 (checked by top_tb at ecall)
+addi x1,x0,1
+fail:
+nop
+nop
+nop
+nop
+ecall
+nop
+nop
+nop
+nop

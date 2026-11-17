@@ -1,0 +1,24 @@
+# Load-use stall in front of the multiplier and the divider
+addi x2,x2,-8
+addi x6,x0,6
+sw x6,0(x2)
+lw x4,0(x2)
+mul x5,x4,x4
+lw x7,0(x2)
+div x8,x7,x6
+addi x9,x0,36
+bne x5,x9,fail
+addi x9,x0,1
+bne x8,x9,fail
+# pass: x1 = 1 (checked by top_tb at ecall)
+addi x1,x0,1
+fail:
+nop
+nop
+nop
+nop
+ecall
+nop
+nop
+nop
+nop

@@ -1,0 +1,28 @@
+# M instructions on the wrong path of a taken branch must be squashed:
+# no register write and no leftover divider stall
+addi x5,x0,100
+addi x6,x0,7
+beq x0,x0,target
+div x7,x5,x6
+mul x8,x5,x6
+target:
+addi x9,x9,1
+bne x7,x0,fail
+bne x8,x0,fail
+addi x10,x0,1
+bne x9,x10,fail
+div x11,x5,x6
+addi x12,x0,14
+bne x11,x12,fail
+# pass: x1 = 1 (checked by top_tb at ecall)
+addi x1,x0,1
+fail:
+nop
+nop
+nop
+nop
+ecall
+nop
+nop
+nop
+nop

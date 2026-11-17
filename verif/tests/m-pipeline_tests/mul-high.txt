@@ -1,0 +1,37 @@
+# High-half multiplies on corner values; MULHSU operand order matters
+lui x5,0x80000
+mulh x6,x5,x5
+lui x7,0x40000
+bne x6,x7,fail
+mulhu x6,x5,x5
+bne x6,x7,fail
+mulhsu x6,x5,x5
+lui x7,0xC0000
+bne x6,x7,fail
+addi x8,x0,-1
+mulhu x6,x8,x8
+addi x7,x0,-2
+bne x6,x7,fail
+mulh x6,x8,x8
+bne x6,x0,fail
+mul x6,x8,x8
+addi x7,x0,1
+bne x6,x7,fail
+addi x9,x0,2
+mulhsu x6,x8,x9
+bne x6,x8,fail
+mulhsu x6,x9,x8
+addi x7,x0,1
+bne x6,x7,fail
+# pass: x1 = 1 (checked by top_tb at ecall)
+addi x1,x0,1
+fail:
+nop
+nop
+nop
+nop
+ecall
+nop
+nop
+nop
+nop

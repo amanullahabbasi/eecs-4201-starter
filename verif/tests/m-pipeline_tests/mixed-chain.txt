@@ -1,0 +1,28 @@
+# Dependency chain through the MDU: mul -> div -> rem -> add -> mulh
+addi x5,x0,12
+addi x6,x0,-5
+mul x7,x5,x6
+div x8,x7,x5
+rem x9,x5,x8
+add x10,x9,x8
+mulh x11,x10,x10
+addi x12,x0,-60
+bne x7,x12,fail
+bne x8,x6,fail
+addi x12,x0,2
+bne x9,x12,fail
+addi x12,x0,-3
+bne x10,x12,fail
+bne x11,x0,fail
+# pass: x1 = 1 (checked by top_tb at ecall)
+addi x1,x0,1
+fail:
+nop
+nop
+nop
+nop
+ecall
+nop
+nop
+nop
+nop
