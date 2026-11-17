@@ -21,6 +21,7 @@
  * 7) 1-bit memory read en memren_o
  * 8) 1-bit memory write en memwren_o
  * 9) 2-bit writeback sel wbsel_o
+ *10) 1-bit multiply/divide select mdusel_o (RV32M instruction)
  */
 
 `include "constants.svh"
@@ -43,7 +44,8 @@ module control #(
     output logic memren_o,
     output logic memwren_o,
     output logic [1:0] wbsel_o,
-    output logic [3:0] alusel_o
+    output logic [3:0] alusel_o,
+    output logic mdusel_o
 );
 
 /* Logic hole 4 (LH4): Complete the control path. This is a key logic module
@@ -120,6 +122,12 @@ module control #(
     assign memwren_o = ctrl_bits[`MEMWREN];
     assign wbsel_o   = ctrl_bits[`WBSEL];
     assign alusel_o  = ctrl_bits[`ALUSEL];
+
+    // RV32M instructions share the R-type opcode and are told apart only by
+    // funct7 = 0000001. All other R-type control bits (register write, ALU
+    // writeback path, rs1/rs2 operands) already apply; execute uses mdusel_o
+    // to take the result from the multiply/divide units instead of the ALU.
+    assign mdusel_o  = (opcode_i == `R_TYPE) && (funct7_i == `F7_MULDIV);
 
 endmodule : control
 

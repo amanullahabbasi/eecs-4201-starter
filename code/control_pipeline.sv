@@ -20,6 +20,7 @@ module control_pipeline (
     input logic memwren_i,
     input logic [1:0] wbsel_i,
     input logic [3:0] alusel_i,
+    input logic mdusel_i,
 
     output logic x_pcsel_o,
     output logic x_immsel_o,
@@ -30,6 +31,7 @@ module control_pipeline (
     output logic x_memwren_o,
     output logic [1:0] x_wbsel_o,
     output logic [3:0] x_alusel_o,
+    output logic x_mdusel_o,
 
     output logic m_regwren_o,
     output logic m_memren_o,
@@ -40,12 +42,12 @@ module control_pipeline (
     output logic [1:0] w_wbsel_o
 );
 
-    logic [12:0] d_ctrl;
-    logic [12:0] x_ctrl;
-    logic [12:0] m_ctrl;
-    logic [12:0] w_ctrl;
+    logic [13:0] d_ctrl;
+    logic [13:0] x_ctrl;
+    logic [13:0] m_ctrl;
+    logic [13:0] w_ctrl;
 
-    assign d_ctrl = {alusel_i, wbsel_i, memwren_i, memren_i,
+    assign d_ctrl = {mdusel_i, alusel_i, wbsel_i, memwren_i, memren_i,
                      rs2sel_i, rs1sel_i, regwren_i, immsel_i, pcsel_i};
 
     always_ff @(posedge clk) begin
@@ -72,6 +74,7 @@ module control_pipeline (
     assign x_memwren_o = x_ctrl[`MEMWREN];
     assign x_wbsel_o = x_ctrl[`WBSEL];
     assign x_alusel_o = x_ctrl[`ALUSEL];
+    assign x_mdusel_o = x_ctrl[`MDUSEL];
 
     assign m_regwren_o = m_ctrl[`REGWREN];
     assign m_memren_o = m_ctrl[`MEMREN];

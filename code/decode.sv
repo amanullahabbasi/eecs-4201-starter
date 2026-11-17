@@ -33,6 +33,8 @@ module decode #(
     assign insn_o = insn_i;
     assign opcode_o = `OPCODE;
     assign funct3_o = `FUNCT3;
+    // funct7 also marks RV32M instructions (0000001). They are R-type, so the
+    // rs1/rs2/rd extraction below already covers them.
     assign funct7_o = `FUNCT7;
 
     assign uses_rs1 = opcode_o == `R_TYPE || opcode_o == `I_TYPE ||
