@@ -28,3 +28,20 @@ jobs:
 
       - name: Hazard and forwarding testbench
         run: make -C verif tb-hazard_forwarding_stall_tb VERILATOR="verilator -Wno-fatal"
+
+      - name: RV32M divider testbench
+        run: make -C verif tb-div_rem_unit_tb VERILATOR="verilator -Wno-fatal"
+
+      - name: RV32M multiplier testbench
+        run: make -C verif tb-mul_unit_tb VERILATOR="verilator -Wno-fatal"
+
+      - name: RV32M decode and control testbench
+        run: make -C verif tb-m_control_tb VERILATOR="verilator -Wno-fatal"
+
+      - name: RV32M pipeline programs
+        run: |
+          make -C verif sim TEST_DIR=m-pipeline_tests VERILATOR="verilator -Wno-fatal" | tee m-pipeline.log
+          expected=$(ls verif/tests/m-pipeline_tests/*.x | wc -l)
+          passed=$(grep -c "Test Passed" m-pipeline.log || true)
+          echo "RV32M pipeline programs passed: $passed / $expected"
+          test "$passed" -eq "$expected"
