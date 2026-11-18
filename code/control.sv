@@ -67,17 +67,21 @@ module control #(
                 regwren_o = 1'b1;
                 wbsel_o   = `WB_ALU;
 
-                case (funct3_i)
-                    `F3_ADD:    alusel_o = (funct7_i == `F7_SUB) ? `ALU_SUB : `ALU_ADD;
-                    `F3_XOR:    alusel_o = `ALU_XOR;
-                    `F3_OR:     alusel_o = `ALU_OR;
-                    `F3_AND:    alusel_o = `ALU_AND;
-                    `F3_SLEFT:  alusel_o = `ALU_SLL;
-                    `F3_SRIGHT: alusel_o = (funct7_i == `F7_SRA) ? `ALU_SRA : `ALU_SRL;
-                    `F3_SLT:    alusel_o = `ALU_SLT;
-                    `F3_SLTU:   alusel_o = `ALU_SLTU;
-                    default:    alusel_o = `ALU_NOP;
-                endcase
+                if (funct7_i == `F7_M) begin
+                    alusel_o = `ALU_M;
+                end else begin
+                    case (funct3_i)
+                        `F3_ADD:    alusel_o = (funct7_i == `F7_SUB) ? `ALU_SUB : `ALU_ADD;
+                        `F3_XOR:    alusel_o = `ALU_XOR;
+                        `F3_OR:     alusel_o = `ALU_OR;
+                        `F3_AND:    alusel_o = `ALU_AND;
+                        `F3_SLEFT:  alusel_o = `ALU_SLL;
+                        `F3_SRIGHT: alusel_o = (funct7_i == `F7_SRA) ? `ALU_SRA : `ALU_SRL;
+                        `F3_SLT:    alusel_o = `ALU_SLT;
+                        `F3_SLTU:   alusel_o = `ALU_SLTU;
+                        default:    alusel_o = `ALU_NOP;
+                    endcase
+                end
             end
 
             `I_TYPE: begin

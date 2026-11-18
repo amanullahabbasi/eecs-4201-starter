@@ -35,6 +35,19 @@ module alu #(
     // Signals for branch control signals
     logic breq, brlt;
 
+    // MUL uses lower half, rest use upper half
+    // MUL or MULHU
+    logic [63:0] product_unsigned;
+    assign product_unsigned = {32'b0, rs1_i} * {32'b0, rs2_i};
+
+    // MULH (both signed)
+    logic [63:0] product_signed;
+    assign product_signed = $signed({{32{rs1_i[31]}}, rs1_i}) * $signed({{32{rs2_i[31]}}, rs2_i});
+
+    // MULHSU
+    logic [63:0] product_signed_unsigned;
+    assign product_signed_unsigned = $signed({{32{rs1_i[31]}}, rs1_i}) * $signed({32'b0, rs2_i});
+
     /*
      * Instantiation of branch control module
      * This made more sense to me, so we instantiated it here.
@@ -93,6 +106,58 @@ module alu #(
             `ALU_SRA:  res_o = $signed(rs1_i) >>> rs2_i[4:0];
             `ALU_SLT:  res_o = ($signed(rs1_i) < $signed(rs2_i)) ? 32'd1 : 32'd0;
             `ALU_SLTU: res_o = (rs1_i < rs2_i) ? 32'd1 : 32'd0;
+
+            `ALU_M: begin
+                case (funct3_i)
+                    3'b000: res_o = product_unsigned[31:0];             // MUL
+                    3'b001: res_o = product_signed[63:32];              // MULH
+                    3'b010: res_o = product_signed_unsigned[63:32];     // MULHSU
+                    3'b011: res_o = product_unsigned[63:32];            // MULHU
+
+                    // DIV
+                    3'b100: begin
+                        // division by zero condition
+                        if (rs2_i == 32'b0)
+                            res_o = 32'hFFFF_FFFF;
+                        // overflow condition
+                        else if (rs1_i == 32'h8000_0000 && rs2_i == 32'hFFFF_FFFF)
+                            res_o = 32'h8000_0000;
+                        else
+                            res_o = $signed(rs1_i) / $signed(rs2_i);
+                    end
+
+                    // DIVU
+                    3'b101: begin
+                        if (rs2_i == 32'b0)
+                            res_o = 32'hFFFF_FFFF;
+                        else
+                            res_o = rs1_i / rs2_i;
+                    end
+
+                    // REM
+                    3'b110: begin
+                        // division by zero condition
+                        if (rs2_i == 32'b0)
+                            res_o = rs1_i;
+                        // overflow condition
+                        else if (rs1_i == 32'h8000_0000 && rs2_i == 32'hFFFF_FFFF)
+                            res_o = 32'b0;
+                        else
+                            res_o = $signed(rs1_i) % $signed(rs2_i);
+                    end
+
+                    // REMU
+                    3'b111: begin
+                        if (rs2_i == 32'b0)
+                            res_o = rs1_i;
+                        else
+                            res_o = rs1_i % rs2_i;
+                    end
+
+                    default: res_o = '0;
+                endcase
+            end
+
             default:   res_o = {DWIDTH{1'b0}};
         endcase
     end

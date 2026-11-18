@@ -77,12 +77,15 @@ parameter logic [31:0] ZERO = 32'd0;
  `define F3_BLTU 3'h6
  `define F3_BGEU 3'h7
 
- // funct7 constants for J-type and I-type instructions
+ // funct7 constants for R-type instructions
+ // Also used for bits [31:25] of I-type shift instructions
  `define F7_ADD 7'h00
  `define F7_SUB 7'h20
  `define F7_SLL 7'h00
  `define F7_SRL 7'h00
  `define F7_SRA 7'h20
+
+ `define F7_M   7'h01
 
 // constants for immediate field bit extraction
 `define ITYPE_IMM insn_i[31:20]
@@ -104,6 +107,8 @@ parameter logic [31:0] ZERO = 32'd0;
 `define ALU_SLT 4'b1000
 `define ALU_SLTU 4'b1001
 `define ALU_NOP 4'b1111
+
+`define ALU_M   4'b1010
 
 // Write Back Constants
 `define WB_ALU 2'b00
