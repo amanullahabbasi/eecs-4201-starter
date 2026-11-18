@@ -82,6 +82,7 @@ module rv_core #(
     // stall and flush logic instantiation
     stall_flush_logic stall_flush (
         .hazard_i(hazard),
+        .m_wait_i(x_m_wait),
         .br_jump_i(jump_branch),
         .pc_en_o(pc_en),
         .stall_o(stall),
@@ -174,6 +175,7 @@ module rv_core #(
     wire c_memwren;
     wire [1:0] c_wbsel;
     wire [3:0] c_alusel;
+
     // control instantiation
     control #(
         .DWIDTH(32)
@@ -240,6 +242,14 @@ module rv_core #(
     logic [DWIDTH - 1:0] wb_data;
     logic e_brtaken;
 
+    // 1 when Execute holds an M-extension instruction
+    logic x_is_m;
+
+    logic        md_done;           // wrapper's answer is available
+    logic        md_accept;         // core can take the wrapper's answer
+    logic [31:0] md_result;         // answer from the wrapper
+    logic        x_m_wait;          // execute must wait for the M answer
+
     hazard_detection_unit hazard1 (
         .d_rs1_i(d_rs1),
         .d_rs2_i(d_rs2),
@@ -302,6 +312,15 @@ module rv_core #(
     assign mux_B = e_rs2data;
     assign alu_B = x_rs2sel ? id_ex_imm : mux_B;
 
+    // Control has already identified M instructions using ALU_M, gives 1 for M/D/R, 0 for other ALUs
+    assign x_is_m = (x_alusel == `ALU_M);
+
+    // Wait while an M instruction is in execute and its answer is not ready
+    assign x_m_wait = x_is_m && !md_done;
+
+    // Accept the M answer only when EX/MEM will store it on this clock edge.
+    assign md_accept = !reset && x_is_m && md_done && exmem_en && !exmem_clear;
+
     // Logic hole 6 (LH6): Please see execute.sv for details on LH6
     // Execute instantiation
     alu #(
@@ -319,6 +338,21 @@ module rv_core #(
       .res_o(e_res),
       .brtaken_o(e_brtaken)
     );
+
+
+    muldiv_unit m_unit (
+    .clk      (clk),
+    .reset    (reset),
+    .start_i  (x_is_m),                     // Offer the M instruction in Execute
+    .ready_o  (),                           // Wrapper checks readiness internally
+    .funct3_i (id_ex_insn[14:12]),          // Select the M operation
+    .rs1_i    (e_rs1data),                  // First forwarded register value
+    .rs2_i    (e_rs2data),                  // Second forwarded register value
+    .done_o   (md_done),                    // Wrapper reports an available answer
+    .accept_i (md_accept),                  // Core confirms it can store the answer
+    .result_o (md_result)                   // Wrapper's calculated answer
+    );
+
 
     // ---------- MEMORY STAGE ---------- //
     logic insn_en;
@@ -442,7 +476,7 @@ module rv_core #(
         else if (exmem_en) begin
             ex_mem_pc <= id_ex_pc;
             ex_mem_insn <= id_ex_insn;
-            ex_mem_result <= e_res;
+            ex_mem_result <= x_is_m ? md_result : e_res;        // M answer or normal ALU answer
             ex_mem_store_data <= e_rs2data;
             ex_mem_imm <= id_ex_imm;
             ex_mem_rs2 <= id_ex_rs2;
