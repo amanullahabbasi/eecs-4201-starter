@@ -4,3 +4,4 @@
 /verif/_results.txt
 /verif/wave.vcd
 /verif/sim_out.tmp
+/verif/tests/generated_c/
