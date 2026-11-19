@@ -4,16 +4,16 @@
  * Description: Pipeline register enables and clears for the three hazard
  *              types. The three requests never occur together: a load-use
  *              hazard needs a load in execute, a redirect needs a branch/jump
- *              in execute, and an MDU stall needs a divide in execute.
+ *              in execute, and an MDU stall needs an M instruction in execute.
  *              1) Load-use hazard: hold PC and IF/ID, insert a bubble into ID/EX.
  *              2) Taken branch/jump: flush IF/ID and ID/EX (2 wrong-path instructions).
- *              3) Multi-cycle divide: hold PC, IF/ID and ID/EX (the divide stays
+ *              3) Multi-cycle M instruction: hold PC, IF/ID and ID/EX (the operation stays
  *                 in execute) and insert bubbles into EX/MEM.
  *
  * Inputs:
  * 1) 1-bit load-use hazard hazard_i
  * 2) 1-bit taken branch or jump br_jump_i
- * 3) 1-bit multiply/divide unit busy mdu_stall_i
+ * 3) 1-bit multiply/divide wait request mdu_stall_i
  *
  * Outputs:
  * 1) 1-bit PC enable pc_en_o
@@ -42,11 +42,11 @@ module stall_flush_logic (
     assign stall_o = (hazard_i || mdu_stall_i) && !br_jump_i;
     assign flush_o = br_jump_i;
 
-    // ID/EX holds the divide in execute; bubble on load-use or redirect
+    // ID/EX holds the active M instruction in execute; bubble on load-use or redirect
     assign idex_en_o = !mdu_stall_i;
     assign idex_clear_o = (hazard_i || br_jump_i) && !mdu_stall_i;
 
-    // Bubbles enter memory while the divide is held in execute
+    // Bubbles enter memory while the M operation is held in execute
     assign exmem_en_o = 1'b1;
     assign exmem_clear_o = mdu_stall_i;
 

@@ -251,9 +251,11 @@ module rv_core #(
     // execute signals
     logic [DWIDTH - 1:0] alu_A, alu_B, mux_B, e_res;
     logic [DWIDTH - 1:0] alu_res;   // ALU result
-    logic [DWIDTH - 1:0] mul_res;   // multiply unit result
+    logic [DWIDTH - 1:0] mul_res;   // iterative multiplier result
     logic [DWIDTH - 1:0] div_res;   // divide/remainder unit result
+    logic x_is_mul;                 // MUL/MULH/MULHSU/MULHU in execute
     logic x_is_div;                 // DIV/DIVU/REM/REMU in execute (funct3 = 1xx)
+    logic mul_done;                 // multiply result valid this cycle
     logic div_done;                 // divide result valid this cycle
     logic [DWIDTH - 1:0] e_rs1data, e_rs2data;
     logic [DWIDTH - 1:0] m_forward_data;
@@ -343,22 +345,27 @@ module rv_core #(
       .brtaken_o(e_brtaken)
     );
 
-    // RV32M units sit in parallel with the ALU and use the forwarded register
-    // values, so the existing bypass paths cover them.
-    mul_unit #(
-      .DWIDTH(DWIDTH)
-    ) e_mul1 (
+    // Both M units latch forwarded operands on start. The execute instruction
+    // stays in place until its selected unit reports a result.
+    assign x_is_mul = x_mdusel && !id_ex_insn[14];
+    assign x_is_div = x_mdusel && id_ex_insn[14];
+
+    mul_iter e_mul1 (
+      .clk(clk),
+      .reset(reset),
+      .start_i(x_is_mul),
+      .ready_o(),
       .funct3_i(id_ex_insn[14:12]),
       .rs1_i(e_rs1data),
       .rs2_i(e_rs2data),
+      .done_o(mul_done),
+      .accept_i(x_is_mul && mul_done && !reset),
       .result_o(mul_res)
     );
 
     // The divider latches its operands when it starts, because the forwarding
     // sources drain while the pipeline is stalled. start_i is only accepted
     // while the divider is idle, so holding it high during the stall is safe.
-    assign x_is_div = x_mdusel && id_ex_insn[14];
-
     div_rem_unit e_div1 (
       .clk(clk),
       .rst(reset),
@@ -372,8 +379,8 @@ module rv_core #(
       .result_o(div_res)
     );
 
-    // Hold the divide in execute until its result is ready
-    assign mdu_stall = x_is_div && !div_done;
+    // Hold either M instruction in execute until its result is ready.
+    assign mdu_stall = (x_is_mul && !mul_done) || (x_is_div && !div_done);
 
     // Execute result: multiply/divide units for RV32M, ALU otherwise. It goes
     // into ex_mem_result with wbsel = WB_ALU, so forwarding and writeback need

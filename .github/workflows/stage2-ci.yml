@@ -32,8 +32,8 @@ jobs:
       - name: RV32M divider testbench
         run: make -C verif tb-div_rem_unit_tb VERILATOR="verilator -Wno-fatal"
 
-      - name: RV32M multiplier testbench
-        run: make -C verif tb-mul_unit_tb VERILATOR="verilator -Wno-fatal"
+      - name: RV32M iterative multiplier testbench
+        run: make -C verif tb-mul_iter_tb VERILATOR="verilator -Wno-fatal"
 
       - name: RV32M decode and control testbench
         run: make -C verif tb-m_control_tb VERILATOR="verilator -Wno-fatal"
