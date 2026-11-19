@@ -345,46 +345,44 @@ module rv_core #(
       .brtaken_o(e_brtaken)
     );
 
-    // Both M units latch forwarded operands on start. The execute instruction
-    // stays in place until its selected unit reports a result.
+    // funct3 high bit selects divide.
     assign x_is_mul = x_mdusel && !id_ex_insn[14];
     assign x_is_div = x_mdusel && id_ex_insn[14];
 
+    // Multiplier receives forwarded operand values.
     mul_iter e_mul1 (
-      .clk(clk),
-      .reset(reset),
-      .start_i(x_is_mul),
-      .ready_o(),
-      .funct3_i(id_ex_insn[14:12]),
-      .rs1_i(e_rs1data),
-      .rs2_i(e_rs2data),
-      .done_o(mul_done),
-      .accept_i(x_is_mul && mul_done && !reset),
-      .result_o(mul_res)
+      .clk(clk),                              // Advance multiplier state
+      .reset(reset),                          // Cancel work on reset
+      .start_i(x_is_mul),                     // Start multiply instruction
+      .ready_o(),                             // Ready signal unused here
+      .funct3_i(id_ex_insn[14:12]),           // Choose multiply variant
+      .rs1_i(e_rs1data),                     // Forwarded first operand
+      .rs2_i(e_rs2data),                     // Forwarded second operand
+      .done_o(mul_done),                     // Result is ready
+      .accept_i(x_is_mul && mul_done && !reset), // Consume completed multiply
+      .result_o(mul_res)                     // Computed multiply result
     );
 
-    // The divider latches its operands when it starts, because the forwarding
-    // sources drain while the pipeline is stalled. start_i is only accepted
-    // while the divider is idle, so holding it high during the stall is safe.
+    // Divider saves forwarded operands at start.
+    // Saved inputs survive pipeline stalls.
     div_rem_unit e_div1 (
-      .clk(clk),
-      .rst(reset),
-      .start_i(x_is_div),
-      .funct3_i(id_ex_insn[14:12]),
-      .dividend_i(e_rs1data),
-      .divisor_i(e_rs2data),
-      .ready_o(),
-      .busy_o(),
-      .done_o(div_done),
-      .result_o(div_res)
+      .clk(clk),                       // Advance divider state
+      .rst(reset),                     // Cancel work on reset
+      .start_i(x_is_div),              // Start divide instruction
+      .funct3_i(id_ex_insn[14:12]),    // Choose quotient or remainder
+      .dividend_i(e_rs1data),         // Forwarded number being divided
+      .divisor_i(e_rs2data),          // Forwarded number dividing it
+      .ready_o(),                     // Ready signal unused here
+      .busy_o(),                      // Stall uses done instead
+      .done_o(div_done),              // Result is ready
+      .result_o(div_res)              // Computed divide result
     );
 
-    // Hold either M instruction in execute until its result is ready.
+    // Hold execute until selected unit finishes.
     assign mdu_stall = (x_is_mul && !mul_done) || (x_is_div && !div_done);
 
-    // Execute result: multiply/divide units for RV32M, ALU otherwise. It goes
-    // into ex_mem_result with wbsel = WB_ALU, so forwarding and writeback need
-    // no changes.
+    // Select ALU, divide, or multiply result.
+    // Existing path forwards and writes back.
     assign e_res = !x_mdusel ? alu_res :
                    x_is_div  ? div_res : mul_res;
 

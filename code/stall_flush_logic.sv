@@ -36,22 +36,26 @@ module stall_flush_logic (
    output logic memwb_clear_o
 );
 
-    // A redirect always moves the PC; otherwise any stall freezes it
+    // Branch redirects override pipeline stalls.
     assign pc_en_o = br_jump_i || !(hazard_i || mdu_stall_i);
-    // IF/ID holds on any stall unless it is being flushed
+    // Freeze fetch/decode during a stall.
     assign stall_o = (hazard_i || mdu_stall_i) && !br_jump_i;
+    // Discard incorrectly fetched branch path.
     assign flush_o = br_jump_i;
 
-    // ID/EX holds the active M instruction in execute; bubble on load-use or redirect
+    // Keep active multiply/divide in execute.
     assign idex_en_o = !mdu_stall_i;
+    // Insert bubble after load or branch.
     assign idex_clear_o = (hazard_i || br_jump_i) && !mdu_stall_i;
 
-    // Bubbles enter memory while the M operation is held in execute
+    // Allow older instructions to drain.
     assign exmem_en_o = 1'b1;
+    // Prevent unfinished result entering memory.
     assign exmem_clear_o = mdu_stall_i;
 
-    // Writeback always drains
+    // Complete older writeback operations normally.
     assign memwb_en_o = 1'b1;
+    // Never erase pending writeback data.
     assign memwb_clear_o = 1'b0;
 
 endmodule: stall_flush_logic
