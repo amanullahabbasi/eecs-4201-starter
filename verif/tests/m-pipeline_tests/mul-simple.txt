@@ -1,0 +1,26 @@
+# MUL with no hazards: basic MDU datapath and writeback
+addi x5,x0,7
+addi x6,x0,6
+addi x8,x0,42
+nop
+nop
+nop
+nop
+mul x7,x5,x6
+nop
+nop
+nop
+nop
+bne x7,x8,fail
+# pass: x1 = 1 (checked by top_tb at ecall)
+addi x1,x0,1
+fail:
+nop
+nop
+nop
+nop
+ecall
+nop
+nop
+nop
+nop

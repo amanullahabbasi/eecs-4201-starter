@@ -1,0 +1,6 @@
+# Local Verilator output and test results
+/verif/Sim/
+/verif/obj_dir*/
+/verif/_results.txt
+/verif/wave.vcd
+/verif/sim_out.tmp

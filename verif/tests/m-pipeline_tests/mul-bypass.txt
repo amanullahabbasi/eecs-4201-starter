@@ -1,0 +1,21 @@
+# Forwarding into the MDU (MX on rs2, WX on rs1) and out of it (MX into the ALU)
+addi x5,x0,-7
+addi x6,x0,6
+mul x7,x5,x6
+add x8,x7,x7
+addi x9,x0,-84
+addi x10,x0,-42
+bne x7,x10,fail
+bne x8,x9,fail
+# pass: x1 = 1 (checked by top_tb at ecall)
+addi x1,x0,1
+fail:
+nop
+nop
+nop
+nop
+ecall
+nop
+nop
+nop
+nop

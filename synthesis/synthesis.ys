@@ -21,6 +21,8 @@ read_slang -Icode \
     code/forwarding_unit.sv \
     code/hazard_detection_unit.sv \
     code/control_pipeline.sv \
+    code/mul_iter.sv \
+    code/div_rem_unit.sv \
     code/rv_core.sv
 
     echo on

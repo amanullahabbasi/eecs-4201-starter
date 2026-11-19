@@ -1,0 +1,36 @@
+# Multi-cycle divide: dependent instruction right after (MX from the divider),
+# an accumulating instruction that must run exactly once, back-to-back divides
+addi x5,x0,-7
+addi x6,x0,2
+div x7,x5,x6
+add x8,x7,x7
+addi x9,x9,5
+rem x10,x5,x6
+divu x11,x5,x6
+remu x12,x5,x6
+addi x9,x9,1
+addi x13,x0,-3
+bne x7,x13,fail
+addi x13,x0,-6
+bne x8,x13,fail
+addi x13,x0,6
+bne x9,x13,fail
+addi x13,x0,-1
+bne x10,x13,fail
+lui x13,0x80000
+addi x13,x13,-4
+bne x11,x13,fail
+addi x13,x0,1
+bne x12,x13,fail
+# pass: x1 = 1 (checked by top_tb at ecall)
+addi x1,x0,1
+fail:
+nop
+nop
+nop
+nop
+ecall
+nop
+nop
+nop
+nop

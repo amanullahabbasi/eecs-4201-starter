@@ -49,6 +49,17 @@ module rv_core #(
     logic [DWIDTH-1:0] mem_wb_imm;
     logic [4:0] mem_wb_rd;
 
+    localparam int IDEX_WIDTH = AWIDTH + (4 * DWIDTH) + 15;
+    localparam int EXMEM_WIDTH = AWIDTH + (4 * DWIDTH) + 10;
+    localparam int MEMWB_WIDTH = AWIDTH + (3 * DWIDTH) + 5;
+
+    logic [IDEX_WIDTH-1:0] idex_next;
+    logic [IDEX_WIDTH-1:0] idex_bubble;
+    logic [EXMEM_WIDTH-1:0] exmem_next;
+    logic [EXMEM_WIDTH-1:0] exmem_bubble;
+    logic [MEMWB_WIDTH-1:0] memwb_next;
+    logic [MEMWB_WIDTH-1:0] memwb_bubble;
+
     logic x_pcsel;
     logic x_immsel;
     logic x_regwren;
@@ -58,6 +69,7 @@ module rv_core #(
     logic x_memwren;
     logic [1:0] x_wbsel;
     logic [3:0] x_alusel;
+    logic x_mdusel;      // RV32M instruction in execute
     logic m_regwren;
     logic m_memren;
     logic m_memwren;
@@ -78,11 +90,13 @@ module rv_core #(
     logic exmem_en, exmem_clear;
     logic memwb_en, memwb_clear;
     logic jump_branch;
+    logic mdu_stall;     // divide in progress, hold the instruction in execute
 
     // stall and flush logic instantiation
     stall_flush_logic stall_flush (
         .hazard_i(hazard),
         .br_jump_i(jump_branch),
+        .mdu_stall_i(mdu_stall),
         .pc_en_o(pc_en),
         .stall_o(stall),
         .flush_o(flush),
@@ -174,6 +188,7 @@ module rv_core #(
     wire c_memwren;
     wire [1:0] c_wbsel;
     wire [3:0] c_alusel;
+    wire c_mdusel;
     // control instantiation
     control #(
         .DWIDTH(32)
@@ -190,7 +205,8 @@ module rv_core #(
         .memren_o(c_memren),
         .memwren_o(c_memwren),
         .wbsel_o(c_wbsel),
-        .alusel_o(c_alusel)
+        .alusel_o(c_alusel),
+        .mdusel_o(c_mdusel)
     );
 
 
@@ -212,6 +228,7 @@ module rv_core #(
         .memwren_i(c_memwren),
         .wbsel_i(c_wbsel),
         .alusel_i(c_alusel),
+        .mdusel_i(c_mdusel),
         .x_pcsel_o(x_pcsel),
         .x_immsel_o(x_immsel),
         .x_regwren_o(x_regwren),
@@ -221,6 +238,7 @@ module rv_core #(
         .x_memwren_o(x_memwren),
         .x_wbsel_o(x_wbsel),
         .x_alusel_o(x_alusel),
+        .x_mdusel_o(x_mdusel),
         .m_regwren_o(m_regwren),
         .m_memren_o(m_memren),
         .m_memwren_o(m_memwren),
@@ -232,6 +250,13 @@ module rv_core #(
     // ---------- EXECUTE STAGE --------- //
     // execute signals
     logic [DWIDTH - 1:0] alu_A, alu_B, mux_B, e_res;
+    logic [DWIDTH - 1:0] alu_res;   // ALU result
+    logic [DWIDTH - 1:0] mul_res;   // iterative multiplier result
+    logic [DWIDTH - 1:0] div_res;   // divide/remainder unit result
+    logic x_is_mul;                 // MUL/MULH/MULHSU/MULHU in execute
+    logic x_is_div;                 // DIV/DIVU/REM/REMU in execute (funct3 = 1xx)
+    logic mul_done;                 // multiply result valid this cycle
+    logic div_done;                 // divide result valid this cycle
     logic [DWIDTH - 1:0] e_rs1data, e_rs2data;
     logic [DWIDTH - 1:0] m_forward_data;
     logic [DWIDTH - 1:0] r_rs1data, r_rs2data;
@@ -316,9 +341,52 @@ module rv_core #(
       .opcode_i(id_ex_insn[6:0]),
       .imm_i(id_ex_imm),
       .alusel_i(x_alusel),
-      .res_o(e_res),
+      .res_o(alu_res),
       .brtaken_o(e_brtaken)
     );
+
+    // Both M units latch forwarded operands on start. The execute instruction
+    // stays in place until its selected unit reports a result.
+    assign x_is_mul = x_mdusel && !id_ex_insn[14];
+    assign x_is_div = x_mdusel && id_ex_insn[14];
+
+    mul_iter e_mul1 (
+      .clk(clk),
+      .reset(reset),
+      .start_i(x_is_mul),
+      .ready_o(),
+      .funct3_i(id_ex_insn[14:12]),
+      .rs1_i(e_rs1data),
+      .rs2_i(e_rs2data),
+      .done_o(mul_done),
+      .accept_i(x_is_mul && mul_done && !reset),
+      .result_o(mul_res)
+    );
+
+    // The divider latches its operands when it starts, because the forwarding
+    // sources drain while the pipeline is stalled. start_i is only accepted
+    // while the divider is idle, so holding it high during the stall is safe.
+    div_rem_unit e_div1 (
+      .clk(clk),
+      .rst(reset),
+      .start_i(x_is_div),
+      .funct3_i(id_ex_insn[14:12]),
+      .dividend_i(e_rs1data),
+      .divisor_i(e_rs2data),
+      .ready_o(),
+      .busy_o(),
+      .done_o(div_done),
+      .result_o(div_res)
+    );
+
+    // Hold either M instruction in execute until its result is ready.
+    assign mdu_stall = (x_is_mul && !mul_done) || (x_is_div && !div_done);
+
+    // Execute result: multiply/divide units for RV32M, ALU otherwise. It goes
+    // into ex_mem_result with wbsel = WB_ALU, so forwarding and writeback need
+    // no changes.
+    assign e_res = !x_mdusel ? alu_res :
+                   x_is_div  ? div_res : mul_res;
 
     // ---------- MEMORY STAGE ---------- //
     logic insn_en;
@@ -395,84 +463,46 @@ module rv_core #(
         end
     end
 
+    assign idex_next = {if_id_pc, if_id_insn, d_rs1data, d_rs2data,
+                        d_imm, d_rs1, d_rs2, d_rd};
+    assign idex_bubble = {{AWIDTH{1'b0}}, `NOP, {DWIDTH{1'b0}},
+                          {DWIDTH{1'b0}}, {DWIDTH{1'b0}}, 5'd0, 5'd0, 5'd0};
+    assign exmem_next = {id_ex_pc, id_ex_insn, e_res, e_rs2data,
+                         id_ex_imm, id_ex_rs2, id_ex_rd};
+    assign exmem_bubble = {{AWIDTH{1'b0}}, `NOP, {DWIDTH{1'b0}},
+                           {DWIDTH{1'b0}}, {DWIDTH{1'b0}}, 5'd0, 5'd0};
+    assign memwb_next = {ex_mem_pc, ex_mem_result, m_data_o, ex_mem_imm, ex_mem_rd};
+    assign memwb_bubble = {{AWIDTH{1'b0}}, {DWIDTH{1'b0}},
+                           {DWIDTH{1'b0}}, {DWIDTH{1'b0}}, 5'd0};
+
     // ID/EX
     always_ff @(posedge clk) begin
-        if (reset || idex_clear) begin
-            id_ex_pc <= '0;
-            id_ex_insn <= `NOP;
-            id_ex_rs1data <= '0;
-            id_ex_rs2data <= '0;
-            id_ex_imm <= '0;
-            id_ex_rs1 <= '0;
-            id_ex_rs2 <= '0;
-            id_ex_rd <= '0;
-        end
-        else if (idex_en) begin
-            id_ex_pc <= if_id_pc;
-            id_ex_insn <= if_id_insn;
-            id_ex_rs1data <= d_rs1data;
-            id_ex_rs2data <= d_rs2data;
-            id_ex_imm <= d_imm;
-            id_ex_rs1 <= d_rs1;
-            id_ex_rs2 <= d_rs2;
-            id_ex_rd <= d_rd;
-        end
+        if (reset || idex_clear)
+            {id_ex_pc, id_ex_insn, id_ex_rs1data, id_ex_rs2data,
+             id_ex_imm, id_ex_rs1, id_ex_rs2, id_ex_rd} <= idex_bubble;
+        else if (idex_en)
+            {id_ex_pc, id_ex_insn, id_ex_rs1data, id_ex_rs2data,
+             id_ex_imm, id_ex_rs1, id_ex_rs2, id_ex_rd} <= idex_next;
     end
 
     // EX/MEM
     always_ff @(posedge clk) begin
-        if (reset) begin
-            ex_mem_pc <= '0;
-            ex_mem_insn <= `NOP;
-            ex_mem_result <= '0;
-            ex_mem_store_data <= '0;
-            ex_mem_imm <= '0;
-            ex_mem_rs2 <= '0;
-            ex_mem_rd <= '0;
-        end
-        else if (exmem_clear) begin
-            ex_mem_pc <= '0;
-            ex_mem_insn <= `NOP;
-            ex_mem_result <= '0;
-            ex_mem_store_data <= '0;
-            ex_mem_imm <= '0;
-            ex_mem_rs2 <= '0;
-            ex_mem_rd <= '0;
-        end
-        else if (exmem_en) begin
-            ex_mem_pc <= id_ex_pc;
-            ex_mem_insn <= id_ex_insn;
-            ex_mem_result <= e_res;
-            ex_mem_store_data <= e_rs2data;
-            ex_mem_imm <= id_ex_imm;
-            ex_mem_rs2 <= id_ex_rs2;
-            ex_mem_rd <= id_ex_rd;
-        end
+        if (reset || exmem_clear)
+            {ex_mem_pc, ex_mem_insn, ex_mem_result, ex_mem_store_data,
+             ex_mem_imm, ex_mem_rs2, ex_mem_rd} <= exmem_bubble;
+        else if (exmem_en)
+            {ex_mem_pc, ex_mem_insn, ex_mem_result, ex_mem_store_data,
+             ex_mem_imm, ex_mem_rs2, ex_mem_rd} <= exmem_next;
     end
 
     // MEM/WB
     always_ff @(posedge clk) begin
-        if (reset) begin
-            mem_wb_pc <= '0;
-            mem_wb_result <= '0;
-            mem_wb_load_data <= '0;
-            mem_wb_imm <= '0;
-            mem_wb_rd <= '0;
-        end
-        else if (memwb_clear) begin
-            mem_wb_pc <= '0;
-            mem_wb_result <= '0;
-            mem_wb_load_data <= '0;
-            mem_wb_imm <= '0;
-            mem_wb_rd <= '0;
-        end
-        else if (memwb_en) begin
-            mem_wb_pc <= ex_mem_pc;
-            mem_wb_result <= ex_mem_result;
-            mem_wb_load_data <= m_data_o;
-            mem_wb_imm <= ex_mem_imm;
-            mem_wb_rd <= ex_mem_rd;
-        end
+        if (reset || memwb_clear)
+            {mem_wb_pc, mem_wb_result, mem_wb_load_data,
+             mem_wb_imm, mem_wb_rd} <= memwb_bubble;
+        else if (memwb_en)
+            {mem_wb_pc, mem_wb_result, mem_wb_load_data,
+             mem_wb_imm, mem_wb_rd} <= memwb_next;
     end
 
     // This is to get yosys to synthesize the design

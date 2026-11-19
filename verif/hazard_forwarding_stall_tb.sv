@@ -37,13 +37,14 @@ module hazard_forwarding_stall_tb;
         .forward_b_sel_o(f_b)
     );
 
-    logic s_hazard, s_br_jump;
+    logic s_hazard, s_br_jump, s_mdu_stall;
     logic s_pc_en, s_stall, s_flush;
     logic s_idex_en, s_idex_clear, s_exmem_en, s_exmem_clear, s_memwb_en, s_memwb_clear;
 
     stall_flush_logic sfl (
         .hazard_i(s_hazard),
         .br_jump_i(s_br_jump),
+        .mdu_stall_i(s_mdu_stall),
         .pc_en_o(s_pc_en),
         .stall_o(s_stall),
         .flush_o(s_flush),
@@ -97,6 +98,7 @@ module hazard_forwarding_stall_tb;
 
         s_hazard = 1'b0;
         s_br_jump = 1'b0;
+        s_mdu_stall = 1'b0;
         #1;
         check(s_pc_en && !s_stall && !s_flush, "sfl idle");
         check(s_idex_en && !s_idex_clear, "sfl idle idex");
@@ -124,6 +126,21 @@ module hazard_forwarding_stall_tb;
         #1;
         check(s_pc_en && !s_stall && s_flush, "sfl flush beats stall");
         check(s_idex_clear, "sfl flush hazard bubble");
+
+        // Multi-cycle divide in execute: hold PC, IF/ID and ID/EX, bubble into EX/MEM
+        s_hazard = 1'b0;
+        s_br_jump = 1'b0;
+        s_mdu_stall = 1'b1;
+        #1;
+        check(!s_pc_en && s_stall && !s_flush, "sfl mdu stall");
+        check(!s_idex_en && !s_idex_clear, "sfl mdu holds idex");
+        check(s_exmem_en && s_exmem_clear, "sfl mdu bubbles exmem");
+        check(s_memwb_en && !s_memwb_clear, "sfl mdu drains memwb");
+
+        // Divide finished: everything flows again
+        s_mdu_stall = 1'b0;
+        #1;
+        check(s_pc_en && !s_stall && s_idex_en && !s_exmem_clear, "sfl mdu release");
 
         if (errors == 0) begin
             $display("hazard_forwarding_stall_tb passed");

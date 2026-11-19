@@ -1,0 +1,29 @@
+# MDU results forwarded into store data and into the branch comparator
+addi x2,x2,-8
+addi x5,x0,100
+addi x6,x0,7
+div x7,x5,x6
+sw x7,0(x2)
+lw x8,0(x2)
+addi x9,x0,14
+bne x8,x9,fail
+addi x11,x0,2
+rem x10,x5,x6
+beq x10,x11,ok
+beq x0,x0,fail
+ok:
+mul x12,x5,x6
+addi x13,x0,700
+bne x12,x13,fail
+# pass: x1 = 1 (checked by top_tb at ecall)
+addi x1,x0,1
+fail:
+nop
+nop
+nop
+nop
+ecall
+nop
+nop
+nop
+nop

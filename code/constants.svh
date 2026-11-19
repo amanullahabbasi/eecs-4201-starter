@@ -26,6 +26,7 @@ parameter logic [31:0] ZERO = 32'd0;
 `define MEMWREN 6
 `define WBSEL 8:7
 `define ALUSEL 12:9
+`define MDUSEL 13
 
 `define D_X ctrl_reg[0]
 `define X_M ctrl_reg[1]
@@ -83,6 +84,19 @@ parameter logic [31:0] ZERO = 32'd0;
  `define F7_SLL 7'h00
  `define F7_SRL 7'h00
  `define F7_SRA 7'h20
+
+ // funct7 constant for M-extension (multiply/divide) instructions
+ `define F7_MULDIV 7'h01
+
+ // funct3 constants for M-extension instructions
+ `define F3_MUL    3'h0
+ `define F3_MULH   3'h1
+ `define F3_MULHSU 3'h2
+ `define F3_MULHU  3'h3
+ `define F3_DIV    3'h4
+ `define F3_DIVU   3'h5
+ `define F3_REM    3'h6
+ `define F3_REMU   3'h7
 
 // constants for immediate field bit extraction
 `define ITYPE_IMM insn_i[31:20]

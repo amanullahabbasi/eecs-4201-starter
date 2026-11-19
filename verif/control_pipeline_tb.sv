@@ -19,6 +19,8 @@ module control_pipeline_tb;
     logic memwren;
     logic [1:0] wbsel;
     logic [3:0] alusel;
+    logic mdusel;
+    logic x_mdusel;
     logic x_pcsel;
     logic x_immsel;
     logic x_regwren;
@@ -53,6 +55,7 @@ module control_pipeline_tb;
         .memwren_i(memwren),
         .wbsel_i(wbsel),
         .alusel_i(alusel),
+        .mdusel_i(mdusel),
         .x_pcsel_o(x_pcsel),
         .x_immsel_o(x_immsel),
         .x_regwren_o(x_regwren),
@@ -62,6 +65,7 @@ module control_pipeline_tb;
         .x_memwren_o(x_memwren),
         .x_wbsel_o(x_wbsel),
         .x_alusel_o(x_alusel),
+        .x_mdusel_o(x_mdusel),
         .m_regwren_o(m_regwren),
         .m_memren_o(m_memren),
         .m_memwren_o(m_memwren),
@@ -96,6 +100,7 @@ module control_pipeline_tb;
         memwren = 1'b0;
         wbsel = `WB_ALU;
         alusel = `ALU_NOP;
+        mdusel = 1'b0;
 
         repeat (2) @(posedge clk);
         @(negedge clk);
@@ -163,6 +168,33 @@ module control_pipeline_tb;
         @(posedge clk);
         #1;
         check(!w_regwren, "memwb clear");
+
+        // M-extension select bit reaches execute, is held, and is cleared
+        @(negedge clk);
+        memwb_clear = 1'b0;
+        idex_en = 1'b1;
+        mdusel = 1'b1;
+        regwren = 1'b1;
+
+        @(posedge clk);
+        #1;
+        check(x_mdusel && x_regwren, "idex mdusel load");
+
+        @(negedge clk);
+        idex_en = 1'b0;
+        mdusel = 1'b0;
+
+        @(posedge clk);
+        #1;
+        check(x_mdusel, "idex mdusel hold during divide stall");
+
+        @(negedge clk);
+        idex_en = 1'b1;
+        idex_clear = 1'b1;
+
+        @(posedge clk);
+        #1;
+        check(!x_mdusel && !x_regwren, "idex mdusel clear");
 
         $display("control_pipeline_tb passed");
         $finish;

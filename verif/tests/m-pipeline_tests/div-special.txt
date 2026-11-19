@@ -1,0 +1,32 @@
+# Spec special cases: signed overflow and divide by zero (no iteration, no stall)
+lui x5,0x80000
+addi x6,x0,-1
+div x7,x5,x6
+bne x7,x5,fail
+rem x7,x5,x6
+bne x7,x0,fail
+divu x7,x5,x6
+bne x7,x0,fail
+remu x7,x5,x6
+bne x7,x5,fail
+addi x8,x0,20
+div x7,x8,x0
+bne x7,x6,fail
+divu x7,x8,x0
+bne x7,x6,fail
+rem x7,x8,x0
+bne x7,x8,fail
+remu x7,x8,x0
+bne x7,x8,fail
+# pass: x1 = 1 (checked by top_tb at ecall)
+addi x1,x0,1
+fail:
+nop
+nop
+nop
+nop
+ecall
+nop
+nop
+nop
+nop

@@ -83,67 +83,51 @@ module main_memory #(
     logic [AWIDTH-1:0] program_counter;
     assign program_counter = (pc_i - BASE_ADDR) >> 2;
 
-    // READ ONLY
+    function automatic logic valid_pc(input logic [AWIDTH-1:0] pc);
+        valid_pc = (pc >= BASE_ADDR) && (pc + 32'd3 < BASE_ADDR + MEM_BYTES);
+    endfunction
+
+    function automatic logic [DWIDTH-1:0] instruction_read(
+        input logic [AWIDTH-1:0] pc,
+        input logic [AWIDTH-1:0] word_index
+    );
+        instruction_read = '0;
+        if (!rst && insnen_i && valid_pc(pc)) instruction_read = main_memory[word_index];
+`ifndef SYNTHESIS
+        else if (!rst && insnen_i && !$isunknown(pc)) instruction_read = 32'hDEAD_BEEF;
+`else
+        else if (!rst && insnen_i) instruction_read = 32'hDEAD_BEEF;
+`endif
+    endfunction
+
     always_comb begin
-        insn_o = '0;
-        if (rst) begin
-            insn_o = '0;
-        end
-        else if (insnen_i) begin
-`ifndef SYNTHESIS
-            if ($isunknown(pc_i)) begin
-                insn_o = '0;
-            end
-            else
-`endif
-            if ((pc_i >= BASE_ADDR) &&
-                (pc_i + 32'd3 < BASE_ADDR + MEM_BYTES)) begin
-                insn_o = main_memory[program_counter];
-            end
-            else begin
-                insn_o = 32'hDEAD_BEEF;
-`ifndef SYNTHESIS
-                $display("IMEMORY: 00B read @0x%08h (mapped 0x%08h)",
-                         pc_i, program_counter);
-`endif
-            end
-        end
+        insn_o = instruction_read(pc_i, program_counter);
     end
 
     // Shift byte address from memory controller to word index for memory
     logic [AWIDTH-1:0] address;
     assign address = addr_i >> 2;
 
-    //---------- Memory Data Read ----------//
-    always_comb begin
-        data_o = '0;
-        if (rst) begin
-            data_o = '0;
-        end
-        else if (memren_i) begin
+    function automatic logic [DWIDTH-1:0] data_read(
+        input logic [AWIDTH-1:0] word_index
+    );
+        data_read = '0;
 `ifndef SYNTHESIS
-            if ($isunknown(address)) begin
-                data_o = '0;
-            end
-            else
+        if (!rst && memren_i && !$isunknown(word_index)) data_read = main_memory[word_index];
+`else
+        if (!rst && memren_i) data_read = main_memory[word_index];
 `endif
-            begin
-                data_o = main_memory[address];
-            end
-        end
+    endfunction
+
+    always_comb begin
+        data_o = data_read(address);
     end
 
     //---------- Memory Data Write ----------//
-    // +: is an "Index Part-Select"; [starting_bit +: width_select]
     always_ff @(posedge clk) begin
         if (memwren_i) begin
-            // Manually checking each byte lane
             for (int i = 0; i < (DWIDTH/8); i++) begin
-                // This cycles through each byte of the memory block
-                // and checks if the byte is enabled (from the controller)
-                if (bytelane_i[i]) begin
-                    main_memory[address][(i*8) +: 8] <= data_i[(i*8) +: 8];
-                end
+                if (bytelane_i[i]) main_memory[address][(i*8) +: 8] <= data_i[(i*8) +: 8];
             end
         end
     end

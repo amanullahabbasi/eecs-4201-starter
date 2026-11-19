@@ -1,0 +1,36 @@
+# Trial division: 29 is prime, while 35 has the factor 5.
+# A pass means both decisions were reached through REMU and a loop.
+addi x5,x0,29
+addi x6,x0,2
+prime_loop:
+beq x6,x5,prime_done
+remu x7,x5,x6
+beq x7,x0,fail
+addi x6,x6,1
+jal x0,prime_loop
+prime_done:
+addi x5,x0,35
+addi x6,x0,2
+composite_loop:
+beq x6,x5,fail
+remu x7,x5,x6
+beq x7,x0,found_factor
+addi x6,x6,1
+jal x0,composite_loop
+found_factor:
+addi x8,x0,5
+bne x6,x8,fail
+addi x1,x0,1
+jal x0,finish
+fail:
+addi x1,x0,0
+finish:
+nop
+nop
+nop
+nop
+ecall
+nop
+nop
+nop
+nop

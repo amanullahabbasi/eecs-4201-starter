@@ -50,50 +50,65 @@ module alu #(
         .brlt_o(brlt)
     );
 
-    // Combinational procedural block for branch control
-    always_comb begin
-        if (opcode_i == `B_TYPE) begin
-            case (funct3_i)
-                `F3_BEQ:  brtaken_o = breq;
-                `F3_BNE:  brtaken_o = !breq;
-                `F3_BLT:  brtaken_o = brlt;
-                `F3_BLTU: brtaken_o = brlt;
-                `F3_BGE:  brtaken_o = !brlt;
-                `F3_BGEU: brtaken_o = !brlt;
-                default:  brtaken_o = 1'b0;
+    function automatic logic branch_taken(
+        input logic [6:0] opcode,
+        input logic [2:0] funct3,
+        input logic breq_v,
+        input logic brlt_v
+    );
+        branch_taken = 1'b0;
+        if (opcode == `B_TYPE) begin
+            case (funct3)
+                `F3_BEQ:  branch_taken = breq_v;
+                `F3_BNE:  branch_taken = !breq_v;
+                `F3_BLT, `F3_BLTU: branch_taken = brlt_v;
+                `F3_BGE, `F3_BGEU: branch_taken = !brlt_v;
+                default: ;
             endcase
         end
-        else begin
-            brtaken_o = 1'b0;
-        end
-    end
+    endfunction
 
-    /*
-     * Combinational procedural block for alu operations
-     */
-    always_comb begin
-        case (alusel_i)
-            // For branch, jal, and jalr instructions calculate new PC
-            `ALU_ADD: begin
-                if (opcode_i == `B_TYPE) begin
-                    res_o = pc_i + imm_i;
-                end else if (opcode_i == `I_TYPE_JALR) begin
-                    res_o = (rs1_i + rs2_i) & 32'hFFFF_FFFE;
-                end else begin
-                    res_o = rs1_i + rs2_i;
-                end
-            end
+    function automatic logic [DWIDTH-1:0] add_result(
+        input logic [6:0] opcode,
+        input logic [AWIDTH-1:0] pc,
+        input logic [DWIDTH-1:0] rs1,
+        input logic [DWIDTH-1:0] rs2,
+        input logic [DWIDTH-1:0] imm
+    );
+        if (opcode == `B_TYPE) add_result = pc + imm;
+        else if (opcode == `I_TYPE_JALR) add_result = (rs1 + rs2) & 32'hFFFF_FFFE;
+        else add_result = rs1 + rs2;
+    endfunction
 
-            `ALU_SUB:  res_o = rs1_i - rs2_i;
-            `ALU_AND:  res_o = rs1_i & rs2_i;
-            `ALU_OR:   res_o = rs1_i | rs2_i;
-            `ALU_XOR:  res_o = rs1_i ^ rs2_i;
-            `ALU_SLL:  res_o = rs1_i << rs2_i[4:0];
-            `ALU_SRL:  res_o = rs1_i >> rs2_i[4:0];
-            `ALU_SRA:  res_o = $signed(rs1_i) >>> rs2_i[4:0];
-            `ALU_SLT:  res_o = ($signed(rs1_i) < $signed(rs2_i)) ? 32'd1 : 32'd0;
-            `ALU_SLTU: res_o = (rs1_i < rs2_i) ? 32'd1 : 32'd0;
-            default:   res_o = {DWIDTH{1'b0}};
+    function automatic logic [DWIDTH-1:0] alu_result(
+        input logic [3:0] alusel,
+        input logic [6:0] opcode,
+        input logic [AWIDTH-1:0] pc,
+        input logic [DWIDTH-1:0] rs1,
+        input logic [DWIDTH-1:0] rs2,
+        input logic [DWIDTH-1:0] imm
+    );
+        case (alusel)
+            `ALU_ADD:  alu_result = add_result(opcode, pc, rs1, rs2, imm);
+            `ALU_SUB:  alu_result = rs1 - rs2;
+            `ALU_AND:  alu_result = rs1 & rs2;
+            `ALU_OR:   alu_result = rs1 | rs2;
+            `ALU_XOR:  alu_result = rs1 ^ rs2;
+            `ALU_SLL:  alu_result = rs1 << rs2[4:0];
+            `ALU_SRL:  alu_result = rs1 >> rs2[4:0];
+            `ALU_SRA:  alu_result = $signed(rs1) >>> rs2[4:0];
+            `ALU_SLT:  alu_result = ($signed(rs1) < $signed(rs2)) ? 32'd1 : 32'd0;
+            `ALU_SLTU: alu_result = (rs1 < rs2) ? 32'd1 : 32'd0;
+            default:   alu_result = {DWIDTH{1'b0}};
         endcase
+    endfunction
+
+    always_comb begin
+        brtaken_o = branch_taken(opcode_i, funct3_i, breq, brlt);
     end
+
+    always_comb begin
+        res_o = alu_result(alusel_i, opcode_i, pc_i, rs1_i, rs2_i, imm_i);
+    end
+
 endmodule : alu

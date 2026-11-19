@@ -1,0 +1,37 @@
+# Integer average: 73 / 5 = 14 remainder 3; round-half-up gives 15.
+# Fixed-point scaling: -1234 / 10 = -123 remainder -4.
+addi x5,x0,73
+addi x6,x0,5
+divu x7,x5,x6
+remu x8,x5,x6
+addi x9,x0,14
+bne x7,x9,fail
+addi x9,x0,3
+bne x8,x9,fail
+add x10,x8,x8
+blt x10,x6,fail
+addi x11,x7,1
+addi x9,x0,15
+bne x11,x9,fail
+addi x5,x0,-1234
+addi x6,x0,10
+div x7,x5,x6
+rem x8,x5,x6
+addi x9,x0,-123
+bne x7,x9,fail
+addi x9,x0,-4
+bne x8,x9,fail
+addi x1,x0,1
+jal x0,finish
+fail:
+addi x1,x0,0
+finish:
+nop
+nop
+nop
+nop
+ecall
+nop
+nop
+nop
+nop
